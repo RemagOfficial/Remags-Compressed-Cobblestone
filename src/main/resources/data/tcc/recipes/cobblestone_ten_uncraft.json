@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {
+      "item": "tcc:cobblestone_eleven"
+    }
+  ],
+  "result": {
+    "item": "tcc:cobblestone_ten",
+    "count": 9
+  }
+}

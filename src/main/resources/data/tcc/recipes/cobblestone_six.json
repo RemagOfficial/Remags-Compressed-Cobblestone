@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "key": {
+    "#": {
+      "item": "tcc:cobblestone_five"
+    }
+  },
+  "result": {
+    "item": "tcc:cobblestone_six",
+    "count": 1
+  }
+}

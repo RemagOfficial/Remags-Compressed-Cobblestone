@@ -1,0 +1,27 @@
+{
+  "block.tcc.cobblestone_one": "Single Compressed Cobblestone",
+  "block.tcc.cobblestone_two": "Double Compressed Cobblestone",
+  "block.tcc.cobblestone_three": "Triple Compressed Cobblestone",
+  "block.tcc.cobblestone_four": "Quadruple Compressed Cobblestone",
+  "block.tcc.cobblestone_five": "Quintuple Compressed Cobblestone",
+  "block.tcc.cobblestone_six": "Sextuple Compressed Cobblestone",
+  "block.tcc.cobblestone_seven": "Septuple Compressed Cobblestone",
+  "block.tcc.cobblestone_eight": "Octuple Compressed Cobblestone",
+  "block.tcc.cobblestone_nine": "Nontuple Compressed Cobblestone",
+  "block.tcc.cobblestone_ten": "Dectuple Compressed Cobblestone",
+  "block.tcc.cobblestone_eleven": "Undectuple Compressed Cobblestone",
+  "block.tcc.cobblestone_twelve": "Duodectuple Compressed Cobblestone",
+  "block.tcc.cobblestone_thirteen": "Tredectuple Compressed Cobblestone",
+  "block.tcc.cobblestone_fourteen": "Quattuordecuple Compressed Cobblestone",
+  "block.tcc.cobblestone_fifteen": "Quindecuple Compressed Cobblestone",
+  "block.tcc.cobblestone_sixteen": "Sexdecuple Compressed Cobblestone",
+  "block.tcc.cobblestone_seventeen": "Septendecuple Compressed Cobblestone",
+  "block.tcc.cobblestone_eighteen": "Octodecuple Compressed Cobblestone",
+  "block.tcc.cobblestone_nineteen": "Novemdecuple Compressed Cobblestone",
+  "block.tcc.cobblestone_twenty": "Vigintuple Compressed Cobblestone",
+  "block.tcc.cobblestone_twentyone": "Unvigintuple Compressed Cobblestone",
+  "block.tcc.cobblestone_twentytwo": "Duovigintuple Compressed Cobblestone",
+  "block.tcc.cobblestone_twentythree": "Trevigintuple Compressed Cobblestone",
+
+  "itemGroup.tcctab": "Trevigintuple Compressed Cobblestone"
+}
