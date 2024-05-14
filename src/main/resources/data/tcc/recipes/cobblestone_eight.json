@@ -7,11 +7,11 @@
   ],
   "key": {
     "#": {
-      "item": "tcc:cobblestone_seven"
+      "item": "tcc:cobblestone_seven_item"
     }
   },
   "result": {
-    "item": "tcc:cobblestone_eight",
+    "item": "tcc:cobblestone_eight_item",
     "count": 1
   }
 }
