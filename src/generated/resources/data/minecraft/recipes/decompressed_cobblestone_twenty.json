@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "group": "decompress",
+  "ingredients": [
+    {
+      "item": "tcc:cobblestone_twenty_item"
+    }
+  ],
+  "result": {
+    "count": 9,
+    "item": "tcc:cobblestone_nineteen_item"
+  }
+}

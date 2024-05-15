@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "compress",
+  "key": {
+    "#": {
+      "item": "tcc:cobblestone_four_item"
+    }
+  },
+  "pattern": [
+    "###",
+    "###",
+    "###"
+  ],
+  "result": {
+    "item": "tcc:cobblestone_five_item"
+  },
+  "show_notification": true
+}
