@@ -5,8 +5,8 @@ plugins {
 }
 
 version = '1.1-1.20.1'
-group = 'com.remag.tcc' // http://maven.apache.org/guides/mini/guide-naming-conventions.html
-archivesBaseName = 'tcc'
+group = 'com.remag.rcc' // http://maven.apache.org/guides/mini/guide-naming-conventions.html
+archivesBaseName = 'rcc'
 
 // Mojang ships Java 17 to end users in 1.18+, so your mod should target Java 17.
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
@@ -49,10 +49,10 @@ minecraft {
             property 'forge.logging.console.level', 'debug'
 
             // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
-            property 'forge.enabledGameTestNamespaces', 'tcc'
+            property 'forge.enabledGameTestNamespaces', 'rcc'
 
             mods {
-                tcc {
+                rcc {
                     source sourceSets.main
                 }
             }
@@ -65,10 +65,10 @@ minecraft {
 
             property 'forge.logging.console.level', 'debug'
 
-            property 'forge.enabledGameTestNamespaces', 'tcc'
+            property 'forge.enabledGameTestNamespaces', 'rcc'
 
             mods {
-                tcc {
+                rcc {
                     source sourceSets.main
                 }
             }
@@ -84,10 +84,10 @@ minecraft {
 
             property 'forge.logging.console.level', 'debug'
 
-            property 'forge.enabledGameTestNamespaces', 'tcc'
+            property 'forge.enabledGameTestNamespaces', 'rcc'
 
             mods {
-                tcc {
+                rcc {
                     source sourceSets.main
                 }
             }
@@ -101,10 +101,10 @@ minecraft {
             property 'forge.logging.console.level', 'debug'
 
             // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
-            args '--mod', 'tcc', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+            args '--mod', 'rcc', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
 
             mods {
-                tcc {
+                rcc {
                     source sourceSets.main
                 }
             }
@@ -148,12 +148,12 @@ dependencies {
 jar {
     manifest {
         attributes([
-                "Specification-Title"     : "tcc",
-                "Specification-Vendor"    : "tccsareus",
+                "Specification-Title"     : "rcc",
+                "Specification-Vendor"    : "rccsareus",
                 "Specification-Version"   : "1", // We are version 1 of ourselves
                 "Implementation-Title"    : project.name,
                 "Implementation-Version"  : project.jar.archiveVersion,
-                "Implementation-Vendor"   : "tccsareus",
+                "Implementation-Vendor"   : "rccsareus",
                 "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
