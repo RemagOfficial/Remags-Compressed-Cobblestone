@@ -162,6 +162,171 @@ public class ModBlocks {
     public static final RegistryObject<Block> COBBLESTONE_FIFTY = BLOCKS.register("cobblestone_fifty",
             () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
                     .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_FIFTYONE = BLOCKS.register("cobblestone_fiftyone",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_FIFTYTWO = BLOCKS.register("cobblestone_fiftytwo",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_FIFTYTHREE = BLOCKS.register("cobblestone_fiftythree",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_FIFTYFOUR = BLOCKS.register("cobblestone_fiftyfour",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_FIFTYFIVE = BLOCKS.register("cobblestone_fiftyfive",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_FIFTYSIX = BLOCKS.register("cobblestone_fiftysix",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_FIFTYSEVEN = BLOCKS.register("cobblestone_fiftyseven",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_FIFTYEIGHT = BLOCKS.register("cobblestone_fiftyeight",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_FIFTYNINE = BLOCKS.register("cobblestone_fiftynine",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SIXTY = BLOCKS.register("cobblestone_sixty",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SIXTYONE = BLOCKS.register("cobblestone_sixtyone",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SIXTYTWO = BLOCKS.register("cobblestone_sixtytwo",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SIXTYTHREE = BLOCKS.register("cobblestone_sixtythree",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SIXTYFOUR = BLOCKS.register("cobblestone_sixtyfour",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SIXTYFIVE = BLOCKS.register("cobblestone_sixtyfive",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SIXTYSIX = BLOCKS.register("cobblestone_sixtysix",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SIXTYSEVEN = BLOCKS.register("cobblestone_sixtyseven",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SIXTYEIGHT = BLOCKS.register("cobblestone_sixtyeight",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SIXTYNINE = BLOCKS.register("cobblestone_sixtynine",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SEVENTY = BLOCKS.register("cobblestone_seventy",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SEVENTYONE = BLOCKS.register("cobblestone_seventyone",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SEVENTYTWO = BLOCKS.register("cobblestone_seventytwo",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SEVENTYTHREE = BLOCKS.register("cobblestone_seventythree",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SEVENTYFOUR = BLOCKS.register("cobblestone_seventyfour",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SEVENTYFIVE = BLOCKS.register("cobblestone_seventyfive",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SEVENTYSIX = BLOCKS.register("cobblestone_seventysix",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SEVENTYSEVEN = BLOCKS.register("cobblestone_seventyseven",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SEVENTYEIGHT = BLOCKS.register("cobblestone_seventyeight",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_SEVENTYNINE = BLOCKS.register("cobblestone_seventynine",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_EIGHTY = BLOCKS.register("cobblestone_eighty",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_EIGHTYONE = BLOCKS.register("cobblestone_eightyone",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_EIGHTYTWO = BLOCKS.register("cobblestone_eightytwo",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_EIGHTYTHREE = BLOCKS.register("cobblestone_eightythree",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_EIGHTYFOUR = BLOCKS.register("cobblestone_eightyfour",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_EIGHTYFIVE = BLOCKS.register("cobblestone_eightyfive",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_EIGHTYSIX = BLOCKS.register("cobblestone_eightysix",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_EIGHTYSEVEN = BLOCKS.register("cobblestone_eightyseven",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_EIGHTYEIGHT = BLOCKS.register("cobblestone_eightyeight",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_EIGHTYNINE = BLOCKS.register("cobblestone_eightynine",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_NINETY = BLOCKS.register("cobblestone_ninety",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_NINETYONE = BLOCKS.register("cobblestone_ninetyone",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_NINETYTWO = BLOCKS.register("cobblestone_ninetytwo",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_NINETYTHREE = BLOCKS.register("cobblestone_ninetythree",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_NINETYFOUR = BLOCKS.register("cobblestone_ninetyfour",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_NINETYFIVE = BLOCKS.register("cobblestone_ninetyfive",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_NINETYSIX = BLOCKS.register("cobblestone_ninetysix",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_NINETYSEVEN = BLOCKS.register("cobblestone_ninetyseven",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_NINETYEIGHT = BLOCKS.register("cobblestone_ninetyeight",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_NINETYNINE = BLOCKS.register("cobblestone_ninetynine",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_HUNDRED = BLOCKS.register("cobblestone_hundred",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_HUNDREDONE = BLOCKS.register("cobblestone_hundredone",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_HUNDREDTWO = BLOCKS.register("cobblestone_hundredtwo",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_HUNDREDTHREE = BLOCKS.register("cobblestone_hundredthree",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_HUNDREDFOUR = BLOCKS.register("cobblestone_hundredfour",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
+    public static final RegistryObject<Block> COBBLESTONE_HUNDREDFIVE = BLOCKS.register("cobblestone_hundredfive",
+            () -> new Block(BlockBehaviour.Properties.copy(Blocks.COBBLESTONE)
+                    .strength(2f).requiresCorrectToolForDrops()));
 
     public static void register(IEventBus eventBus) {
         BLOCKS.register(eventBus);

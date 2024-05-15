@@ -316,6 +316,334 @@ public class ModItems {
             )
     ));
 
+    public static final RegistryObject<Item> COBBLESTONE_FIFTYONE = addToTab(ITEMS.register("cobblestone_fiftyone",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_FIFTYONE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_FIFTYTWO = addToTab(ITEMS.register("cobblestone_fiftytwo",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_FIFTYTWO.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_FIFTYTHREE = addToTab(ITEMS.register("cobblestone_fiftythree",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_FIFTYTHREE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_FIFTYFOUR = addToTab(ITEMS.register("cobblestone_fiftyfour",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_FIFTYFOUR.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_FIFTYFIVE = addToTab(ITEMS.register("cobblestone_fiftyfive",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_FIFTYFIVE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_FIFTYSIX = addToTab(ITEMS.register("cobblestone_fiftysix",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_FIFTYSIX.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_FIFTYSEVEN = addToTab(ITEMS.register("cobblestone_fiftyseven",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_FIFTYSEVEN.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_FIFTYEIGHT = addToTab(ITEMS.register("cobblestone_fiftyeight",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_FIFTYEIGHT.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_FIFTYNINE = addToTab(ITEMS.register("cobblestone_fiftynine",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_FIFTYNINE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SIXTY = addToTab(ITEMS.register("cobblestone_sixty",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SIXTY.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SIXTYONE = addToTab(ITEMS.register("cobblestone_sixtyone",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SIXTYONE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SIXTYTWO = addToTab(ITEMS.register("cobblestone_sixtytwo",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SIXTYTWO.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SIXTYTHREE = addToTab(ITEMS.register("cobblestone_sixtythree",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SIXTYTHREE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SIXTYFOUR = addToTab(ITEMS.register("cobblestone_sixtyfour",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SIXTYFOUR.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SIXTYFIVE = addToTab(ITEMS.register("cobblestone_sixtyfive",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SIXTYFIVE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SIXTYSIX = addToTab(ITEMS.register("cobblestone_sixtysix",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SIXTYSIX.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SIXTYSEVEN = addToTab(ITEMS.register("cobblestone_sixtyseven",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SIXTYSEVEN.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SIXTYEIGHT = addToTab(ITEMS.register("cobblestone_sixtyeight",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SIXTYEIGHT.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SIXTYNINE = addToTab(ITEMS.register("cobblestone_sixtynine",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SIXTYNINE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SEVENTY = addToTab(ITEMS.register("cobblestone_seventy",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SEVENTY.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SEVENTYONE = addToTab(ITEMS.register("cobblestone_seventyone",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SEVENTYONE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SEVENTYTWO = addToTab(ITEMS.register("cobblestone_seventytwo",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SEVENTYTWO.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SEVENTYTHREE = addToTab(ITEMS.register("cobblestone_seventythree",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SEVENTYTHREE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SEVENTYFOUR = addToTab(ITEMS.register("cobblestone_seventyfour",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SEVENTYFOUR.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SEVENTYFIVE = addToTab(ITEMS.register("cobblestone_seventyfive",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SEVENTYFIVE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SEVENTYSIX = addToTab(ITEMS.register("cobblestone_seventysix",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SEVENTYSIX.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SEVENTYSEVEN = addToTab(ITEMS.register("cobblestone_seventyseven",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SEVENTYSEVEN.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SEVENTYEIGHT = addToTab(ITEMS.register("cobblestone_seventyeight",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SEVENTYEIGHT.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_SEVENTYNINE = addToTab(ITEMS.register("cobblestone_seventynine",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_SEVENTYNINE.get(),
+                    new Item.Properties()
+            )
+    ));
+    public static final RegistryObject<Item> COBBLESTONE_EIGHTY = addToTab(ITEMS.register("cobblestone_eighty",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_EIGHTY.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_EIGHTYONE = addToTab(ITEMS.register("cobblestone_eightyone",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_EIGHTYONE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_EIGHTYTWO = addToTab(ITEMS.register("cobblestone_eightytwo",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_EIGHTYTWO.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_EIGHTYTHREE = addToTab(ITEMS.register("cobblestone_eightythree",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_EIGHTYTHREE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_EIGHTYFOUR = addToTab(ITEMS.register("cobblestone_eightyfour",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_EIGHTYFOUR.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_EIGHTYFIVE = addToTab(ITEMS.register("cobblestone_eightyfive",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_EIGHTYFIVE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_EIGHTYSIX = addToTab(ITEMS.register("cobblestone_eightysix",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_EIGHTYSIX.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_EIGHTYSEVEN = addToTab(ITEMS.register("cobblestone_eightyseven",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_EIGHTYSEVEN.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_EIGHTYEIGHT = addToTab(ITEMS.register("cobblestone_eightyeight",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_EIGHTYEIGHT.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_EIGHTYNINE = addToTab(ITEMS.register("cobblestone_eightynine",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_EIGHTYNINE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_NINETY = addToTab(ITEMS.register("cobblestone_ninety",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_NINETY.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_NINETYONE = addToTab(ITEMS.register("cobblestone_ninetyone",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_NINETYONE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_NINETYTWO = addToTab(ITEMS.register("cobblestone_ninetytwo",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_NINETYTWO.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_NINETYTHREE = addToTab(ITEMS.register("cobblestone_ninetythree",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_NINETYTHREE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_NINETYFOUR = addToTab(ITEMS.register("cobblestone_ninetyfour",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_NINETYFOUR.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_NINETYFIVE = addToTab(ITEMS.register("cobblestone_ninetyfive",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_NINETYFIVE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_NINETYSIX = addToTab(ITEMS.register("cobblestone_ninetysix",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_NINETYSIX.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_NINETYSEVEN = addToTab(ITEMS.register("cobblestone_ninetyseven",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_NINETYSEVEN.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_NINETYEIGHT = addToTab(ITEMS.register("cobblestone_ninetyeight",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_NINETYEIGHT.get(),
+                    new Item.Properties()
+            )
+    ));
+    public static final RegistryObject<Item> COBBLESTONE_NINETYNINE = addToTab(ITEMS.register("cobblestone_ninetynine",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_NINETYNINE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_HUNDRED = addToTab(ITEMS.register("cobblestone_hundred",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_HUNDRED.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_HUNDREDONE = addToTab(ITEMS.register("cobblestone_hundredone",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_HUNDREDONE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_HUNDREDTWO = addToTab(ITEMS.register("cobblestone_hundredtwo",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_HUNDREDTWO.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_HUNDREDTHREE = addToTab(ITEMS.register("cobblestone_hundredthree",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_HUNDREDTHREE.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_HUNDREDFOUR = addToTab(ITEMS.register("cobblestone_hundredfour",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_HUNDREDFOUR.get(),
+                    new Item.Properties()
+            )
+    ));
+
+    public static final RegistryObject<Item> COBBLESTONE_HUNDREDFIVE = addToTab(ITEMS.register("cobblestone_hundredfive",
+            () -> new BlockItem(ModBlocks.COBBLESTONE_HUNDREDFIVE.get(),
+                    new Item.Properties()
+            )
+    ));
+
     public static void register(IEventBus eventBus) {
         ITEMS.register(eventBus);
     }
