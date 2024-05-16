@@ -120,7 +120,6 @@ public class ModBlockLootTables extends BlockLootSubProvider {
         this.dropSelf(ModBlocks.COBBLESTONE_HUNDREDTHREE.get());
         this.dropSelf(ModBlocks.COBBLESTONE_HUNDREDFOUR.get());
         this.dropSelf(ModBlocks.COBBLESTONE_HUNDREDFIVE.get());
-
     }
 
     @Override
