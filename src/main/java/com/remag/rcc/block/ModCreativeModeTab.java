@@ -7,8 +7,9 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ItemLike;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.RegistryObject;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredItem;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +20,7 @@ public class ModCreativeModeTab {
 
     public static final List<Supplier<? extends ItemLike>> RCC_TABS = new ArrayList<>();
 
-    public static final RegistryObject<CreativeModeTab> RCC_TAB = TABS.register("rcc_tab",
+    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> RCC_TAB = TABS.register("rcc_tab",
             () -> CreativeModeTab.builder()
                     .title(Component.translatable("itemGroup.rcctab"))
                     .icon(ModBlocks.COBBLESTONE_ONE.get().asItem()::getDefaultInstance)
@@ -28,7 +29,7 @@ public class ModCreativeModeTab {
                     .build()
     );
 
-    public static <T extends Item> RegistryObject<T> addToTab(RegistryObject<T> itemLike) {
+    public static <T extends Item> DeferredItem<T> addToTab(DeferredItem<T> itemLike) {
         RCC_TABS.add(itemLike);
         return itemLike;
     }
