@@ -27,8 +27,21 @@ sourceSets.main.resources {
     exclude("src/generated/**/.cache") // datagen cache files
 }
 
+// src/main/resources and src/generated/resources are both resource roots, so a hand-authored asset that shares a
+// path with a datagen-generated one (e.g. a custom block model overriding the generated JSON) is seen twice by
+// processResources. The default srcDir order lists src/main/resources first, so EXCLUDE keeps the manual file and
+// drops the generated duplicate instead of failing the build.
+tasks.named('processResources', ProcessResources).configure {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 repositories {
     // Add here additional repositories if required by some of the dependencies below.
+    // JEI (and many other mods) are published to the BlameJared maven.
+    maven {
+        name = 'BlameJared'
+        url = 'https://maven.blamejared.com'
+    }
 }
 
 base {
@@ -117,12 +130,13 @@ configurations {
 }
 
 dependencies {
-    // Example optional mod dependency with JEI
-    // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
-    // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
-    // compileOnly "mezz.jei:jei-${mc_version}-neoforge-api:${jei_version}"
-    // We add the full version to localRuntime, not runtimeOnly, so that we do not publish a dependency on it
-    // localRuntime "mezz.jei:jei-${mc_version}-neoforge:${jei_version}"
+    // JEI recipe viewer for development/testing only.
+    // localRuntime (not runtimeOnly) so it loads in runClient but is NOT published as a dependency of RCC.
+    // The JEI API is compileOnly so our custom recipe category (jei/RccJEIPlugin) builds against mezz.jei.api.*
+    // without JEI becoming a hard runtime requirement of the shipped jar.
+    localRuntime "mezz.jei:jei-${minecraft_version}-neoforge:19.69.0.456"
+    compileOnly "mezz.jei:jei-${minecraft_version}-common-api:19.69.0.456"
+    // compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:19.69.0.456"
 
     // Example mod dependency using a mod jar from ./libs with a flat dir repository
     // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
