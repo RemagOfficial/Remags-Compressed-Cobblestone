@@ -42,6 +42,19 @@ repositories {
         name = 'BlameJared'
         url = 'https://maven.blamejared.com'
     }
+    // Mekanism (for the Creative Power Cube / creative energy during multiblock testing).
+    maven {
+        name = 'ModMaven'
+        url = 'https://modmaven.dev/'
+    }
+    // Storage Drawers (for the creative/infinite storage drawer during multiblock testing).
+    // CurseMaven pins an exact file id, so we can select the NeoForge jar.
+    // (Modrinth's maven keys on the shared version_number, which served the Fabric build.)
+    maven {
+        name = 'CurseMaven'
+        url = 'https://www.cursemaven.com'
+        content { includeGroup 'curse.maven' }
+    }
 }
 
 base {
@@ -137,6 +150,12 @@ dependencies {
     localRuntime "mezz.jei:jei-${minecraft_version}-neoforge:19.69.0.456"
     compileOnly "mezz.jei:jei-${minecraft_version}-common-api:19.69.0.456"
     // compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:19.69.0.456"
+
+    // Testing-only multiblock helpers, loaded in runClient via localRuntime (never published as RCC deps):
+    //  - Mekanism core provides the Creative Power Cube (infinite FE) to power the Compression Manipulator.
+    //  - Storage Drawers provides the creative (infinite) drawer to feed unlimited cobblestone.
+    localRuntime "mekanism:Mekanism:1.21.1-10.7.19.85"
+    localRuntime "curse.maven:storage-drawers-223852:6967730"
 
     // Example mod dependency using a mod jar from ./libs with a flat dir repository
     // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar

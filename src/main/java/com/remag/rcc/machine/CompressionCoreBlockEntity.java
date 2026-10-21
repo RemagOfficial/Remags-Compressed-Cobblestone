@@ -10,6 +10,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -27,6 +28,7 @@ import net.neoforged.neoforge.items.ItemStackHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigInteger;
+import java.util.Objects;
 
 /**
  * Controller of the Compression Manipulator. Holds the seed slot, a base-cobblestone-equivalent fuel-mass
@@ -47,6 +49,8 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
     private static final String TAG_PROGRESS = "progress";
     private static final String TAG_FORMED = "formed";
     private static final String TAG_PENDING = "pendingResult";
+    /** Update-tag-only key carrying the seed tier the client BER should render as the spinning cube. */
+    private static final String TAG_RENDER_SEED = "renderSeed";
 
     private static final int RESCAN_INTERVAL = 20;
 
@@ -98,6 +102,19 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
     /** Whether a valid structure currently surrounds this core; drives machine logic and the GUI, not the model. */
     private boolean formed = false;
 
+    /**
+     * Tier the client should render as the seed cube. Kept equal to the seed across a whole cycle (the slot is
+     * emptied at craft start, but the cube keeps spinning until completion), then cleared. Server-authoritative.
+     */
+    @Nullable
+    private BigInteger renderSeedTier = null;
+    /** Last {@link #renderSeedTier} pushed to clients, so {@code serverTick} only re-syncs when it actually changes. */
+    @Nullable
+    private BigInteger syncedRenderSeedTier = null;
+    /** Client-side mirror of {@link #renderSeedTier}, read by {@link com.remag.rcc.client.CompressionCoreRenderer}. */
+    @Nullable
+    private BigInteger clientSeedTier = null;
+
     private int rescanCooldown = 0;
 
     public CompressionCoreBlockEntity(BlockPos pos, BlockState state) {
@@ -141,6 +158,17 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
     public int getProgress() {
         return progress;
+    }
+
+    /** Seed tier the client BER should render as the spinning cube, or {@code null} when there is nothing to show. */
+    @Nullable
+    public BigInteger getRenderSeedTier() {
+        return clientSeedTier;
+    }
+
+    /** True while a cycle is running; the client uses this to decide whether to spin the cube. */
+    public boolean isCrafting() {
+        return progress > 0;
     }
 
     /** Current fuel requirement (log10 mass) for the seed in the slot, or 0 when there is no valid seed. */
@@ -213,7 +241,13 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             return;
         }
         this.pendingResult = n.shiftLeft(1);
-        this.seed.setStackInSlot(0, ItemStack.EMPTY);
+        // Freeze the render tier NOW, from the seed we are about to consume. This is what guarantees the client
+        // BER has a tier to draw even when the machine never idles (a freshly-loaded, instantly-ready manipulator
+        // starts crafting on its first tick, so syncRenderSeedTier's idle branch would never run otherwise).
+        this.renderSeedTier = n;
+        // Consume exactly ONE seed per craft: a stack in the seed slot is a queue, so the rest survive for later
+        // cycles instead of being wiped when only tier n is actually used.
+        this.seed.extractItem(0, 1, false);
         this.fuelPool = Double.NEGATIVE_INFINITY; // the whole pool is spent (overfeed is lost)
         this.progress = 1;
         setChanged();
@@ -246,6 +280,22 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             }
         } else if (be.canStart()) {
             be.startCraft();
+        }
+        be.syncRenderSeedTier();
+    }
+
+    /**
+     * Keep {@link #renderSeedTier} in step with the seed that owns the current view: the live seed while idle, or
+     * the cycle's seed (captured at {@link #startCraft} and frozen while crafting) otherwise. Push it to clients
+     * only when it changes so the {@link com.remag.rcc.client.CompressionCoreRenderer} cube appears/updates/disappears.
+     */
+    private void syncRenderSeedTier() {
+        if (this.progress == 0) {
+            this.renderSeedTier = seedTier();
+        }
+        if (!Objects.equals(this.renderSeedTier, this.syncedRenderSeedTier)) {
+            this.syncedRenderSeedTier = this.renderSeedTier;
+            sync();
         }
     }
 
@@ -378,6 +428,8 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
     private void sync() {
         if (level != null && !level.isClientSide()) {
+            // Trigger getUpdatePacket() delivery to tracking clients. The client applies it via onDataPacket, which we
+            // override to route into handleUpdateTag so the render tier updates live (not just on chunk load).
             BlockState state = getBlockState();
             level.sendBlockUpdated(worldPosition, state, state, 3);
         }
@@ -411,6 +463,12 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         this.progress = tag.getInt(TAG_PROGRESS);
         this.formed = tag.getBoolean(TAG_FORMED);
         this.pendingResult = tag.contains(TAG_PENDING) ? new BigInteger(tag.getString(TAG_PENDING)) : null;
+        // Re-derive the render tier after a (re)load. A running craft stores its result as pendingResult = seed << 1,
+        // so the seed the cube should show is pendingResult >> 1. Without this, rejoining mid-craft leaves
+        // renderSeedTier null (its idle branch only runs when progress == 0), so no cube appears until the next craft.
+        if (this.pendingResult != null) {
+            this.renderSeedTier = this.pendingResult.shiftRight(1);
+        }
     }
 
     /** Only the render/GUI-relevant scalars go to clients; inventories and energy stay server-side. */
@@ -420,6 +478,9 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         tag.putInt(TAG_PROGRESS, progress);
         tag.putBoolean(TAG_FORMED, formed);
         tag.putDouble(TAG_FUEL_POOL, fuelPool);
+        if (this.renderSeedTier != null) {
+            tag.putString(TAG_RENDER_SEED, this.renderSeedTier.toString());
+        }
         return tag;
     }
 
@@ -428,6 +489,18 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         this.progress = tag.getInt(TAG_PROGRESS);
         this.formed = tag.getBoolean(TAG_FORMED);
         this.fuelPool = tag.getDouble(TAG_FUEL_POOL);
+        this.clientSeedTier = tag.contains(TAG_RENDER_SEED) ? new BigInteger(tag.getString(TAG_RENDER_SEED)) : null;
+    }
+
+    /**
+     * NeoForge's default {@code onDataPacket} applies a live block-entity update packet through
+     * {@code loadWithComponents} -> {@code loadAdditional}, which never reads the client-only render tier. That is why
+     * the cube appeared on chunk load (which uses {@code handleUpdateTag}) but not during a running craft. Route the
+     * packet into {@link #handleUpdateTag} so {@link #clientSeedTier} updates live.
+     */
+    @Override
+    public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet, HolderLookup.Provider registries) {
+        handleUpdateTag(packet.getTag(), registries);
     }
 
     @Nullable

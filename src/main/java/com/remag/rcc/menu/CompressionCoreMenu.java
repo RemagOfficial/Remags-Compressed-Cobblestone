@@ -25,6 +25,7 @@ import org.jetbrains.annotations.Nullable;
  * "10^N" readout.
  */
 public class CompressionCoreMenu extends AbstractContainerMenu implements ContainerData {
+    // Slot-index layout: [0 seed, 1 output, 2.. player inventory].
     private static final int SEED_INDEX = 0;
     private static final int OUTPUT_INDEX = 1;
     private static final int PLAYER_INV_START = 2;
@@ -55,13 +56,13 @@ public class CompressionCoreMenu extends AbstractContainerMenu implements Contai
         ItemStackHandler outputHandler = core != null ? core.getOutput() : new ItemStackHandler(1);
 
         // Machine slots (indexes 0 and 1) must come before the player inventory for quickMoveStack ranges.
-        addSlot(new SlotItemHandler(seedHandler, 0, 61, 21) {
+        addSlot(new SlotItemHandler(seedHandler, 0, 61, 41) {
             @Override
             public boolean mayPlace(ItemStack stack) {
                 return CompressionCoreBlockEntity.isSeed(stack);
             }
         });
-        addSlot(new SlotItemHandler(outputHandler, 0, 61, 63) {
+        addSlot(new SlotItemHandler(outputHandler, 0, 61, 83) {
             @Override
             public boolean mayPlace(ItemStack stack) {
                 return false; // output is take-only; the machine fills it
@@ -75,11 +76,11 @@ public class CompressionCoreMenu extends AbstractContainerMenu implements Contai
     private void addPlayerInventory(Inventory inv) {
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
-                addSlot(new Slot(inv, col + row * 9 + 9, 8 + col * 18, 100 + row * 18));
+                addSlot(new Slot(inv, col + row * 9 + 9, 8 + col * 18, 120 + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            addSlot(new Slot(inv, col, 8 + col * 18, 158));
+            addSlot(new Slot(inv, col, 8 + col * 18, 178));
         }
     }
 
@@ -172,7 +173,7 @@ public class CompressionCoreMenu extends AbstractContainerMenu implements Contai
         result = stack.copy();
 
         if (index < PLAYER_INV_START) {
-            // Machine -> player inventory.
+            // Machine slots (seed/output; guides are always empty) -> player inventory.
             if (!moveItemStackTo(stack, PLAYER_INV_START, PLAYER_INV_END, true)) {
                 return ItemStack.EMPTY;
             }

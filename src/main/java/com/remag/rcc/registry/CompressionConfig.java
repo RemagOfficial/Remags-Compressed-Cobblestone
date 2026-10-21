@@ -32,13 +32,26 @@ public final class CompressionConfig {
     public static final int REGION_RADIUS = 2; // 5x5x5 cube centred on the core
     public static final int ENERGY_CAPACITY = 1_000_000;
     public static final int ENERGY_PER_CRAFT = 250_000;
-    public static final int TICKS_PER_CRAFT = 200;
+    public static final int TICKS_PER_CRAFT = 2400; // 120s per cycle (progress bar + drain rate derive from this)
     public static final int MIN_POWER_PORTS = 1;
     public static final int MIN_ITEM_IN_PORTS = 1;
     public static final int MIN_ITEM_OUT_PORTS = 1;
     /** The structure needs exactly one Interface block (the only GUI entry point); more makes no sense. */
     public static final int MIN_INTERFACES = 1;
     public static final int MAX_INTERFACES = 1;
+
+    // --- Seed cube render (the spinning cube drawn at the core; see client.CompressionCoreRenderer) ---------
+    /**
+     * Side length, in blocks, of the seed cube. The core is a unit cube whose corners reach {@code sqrt(3)/2 ~ 0.87};
+     * a concentric cube only hides it from <em>every</em> rotation once its inradius (scale/2) reaches that, i.e.
+     * {@code SEED_CUBE_SCALE >= sqrt(3)}. Keep it under 3 so the tumbling corners stay inside the 3x3x3 air interior.
+     */
+    public static final float SEED_CUBE_SCALE = 1.2F;
+    /**
+     * Global multiplier on the seed cube's tumble rates. {@code 0} = frozen, {@code 1} = the per-machine baseline,
+     * higher = faster spin. The idle cube never spins regardless of this value.
+     */
+    public static final float SEED_SPIN_SPEED = 4F;
 
     private CompressionConfig() {
     }
@@ -80,11 +93,12 @@ public final class CompressionConfig {
     }
 
     /**
-     * Required fuel mass (log10 space) to double a seed tier {@code n} to {@code 2n}: the target output mass
-     * {@code 9^(2n-1)} dominates the seed's own {@code 9^(n-1)}, so this is approximately {@code (2n-1) * log10(9)}.
+     * Required fuel mass (log10 space) for a cycle seeded by tier {@code n}: one seed-worth of base cobblestone,
+     * i.e. exactly the mass the seed block itself already represents ({@code 9^(n-1)}). Shared by the GUI
+     * readout and the {@code canStart} gate so the number shown is the number actually required.
      */
     public static double requiredMassLog(BigInteger n) {
-        return n.shiftLeft(1).subtract(BigInteger.ONE).doubleValue() * LOG9;
+        return tierMassLog(n);
     }
 
     /** Accumulate two mass logs: {@code log10(10^x + 10^y)}, stable against overflow and large gaps. */

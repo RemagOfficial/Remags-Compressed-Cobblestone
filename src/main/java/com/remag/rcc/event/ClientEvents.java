@@ -2,6 +2,8 @@ package com.remag.rcc.event;
 
 import com.remag.rcc.block.ModBlocks;
 import com.remag.rcc.block.entity.CompressionBlockEntity;
+import com.remag.rcc.block.entity.ModBlockEntities;
+import com.remag.rcc.client.CompressionCoreRenderer;
 import com.remag.rcc.client.CompressionCoreScreen;
 import com.remag.rcc.item.ModItems;
 import com.remag.rcc.menu.ModMenus;
@@ -11,6 +13,7 @@ import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
@@ -38,7 +41,13 @@ public final class ClientEvents {
         modEventBus.addListener(ClientEvents::onRegisterBlockColors);
         modEventBus.addListener(ClientEvents::onRegisterItemColors);
         modEventBus.addListener(ClientEvents::onRegisterMenuScreens);
+        modEventBus.addListener(ClientEvents::onRegisterRenderers);
         modEventBus.addListener(ClientEvents::onClientSetup);
+    }
+
+    /** The core renders its (client-synced) seed as a large spinning 3D cube via this block entity renderer. */
+    private static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerBlockEntityRenderer(ModBlockEntities.COMPRESSION_CORE.get(), CompressionCoreRenderer::new);
     }
 
     /**
