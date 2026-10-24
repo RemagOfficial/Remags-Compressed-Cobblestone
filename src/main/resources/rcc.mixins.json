@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.remag.rcc.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "AdvancementWidgetMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

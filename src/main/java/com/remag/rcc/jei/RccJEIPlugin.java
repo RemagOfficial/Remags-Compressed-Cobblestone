@@ -73,7 +73,8 @@ public class RccJEIPlugin implements IModPlugin {
         registration.addIngredientInfo(ModItems.COMPRESSION_PORT.get(),
                 Component.translatable("jei.rcc.info.port.line1"),
                 Component.translatable("jei.rcc.info.port.line2"),
-                Component.translatable("jei.rcc.info.port.line3"));
+                Component.translatable("jei.rcc.info.port.line3"),
+                Component.translatable("jei.rcc.info.port.line4"));
     }
 
     private static List<CompressionDisplayRecipe> buildExamples() {

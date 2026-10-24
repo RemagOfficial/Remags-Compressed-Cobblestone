@@ -40,6 +40,9 @@ public final class DisplayNames {
     // Decimal places shown for the fractional exponent of non-powers-of-ten (e.g. 1500 -> 10^3.176).
     // Raise it to distinguish levels that sit very close together just above a power of ten.
     private static final int EXPONENT_DECIMALS = 3;
+    // Highest tier whose 9^tier BCE value is still printed as exact digits; beyond this bceValueText switches to the
+    // scientific 10^x form. 9^19 fits a long, 9^20 overflows it, so 19 is the last tier with a readable whole-number readout.
+    private static final BigInteger MAX_EXACT_BCE_TIER = BigInteger.valueOf(19);
 
     private DisplayNames() {
     }
@@ -65,8 +68,45 @@ public final class DisplayNames {
         return powerOfTenWord(n);
     }
 
+    /**
+     * The BCE (base-cobblestone-equivalent) value of a single block at compression {@code tier}, as a short readable
+     * string for tooltips. A tier-{@code t} block is worth {@code 9^t} pieces of vanilla cobblestone, so vanilla itself
+     * ({@code tier 0}) reads {@code "1"} and the count then grows fast. The value is spelled out exactly while
+     * {@code 9^t} still fits a readable long ({@code t <= }{@link #MAX_EXACT_BCE_TIER}); past that it switches to
+     * proper scientific notation with a mantissa, {@code m \u00d7 10^e} (see {@link #scientificFromLog10}), so a deep
+     * milestone shows e.g. {@code 1.22 \u00d7 10^{19}} rather than a wall of digits.
+     */
+    public static String bceValueText(BigInteger tier) {
+        if (tier.signum() <= 0) {
+            return "1";
+        }
+        if (tier.compareTo(MAX_EXACT_BCE_TIER) <= 0) {
+            long value = BigInteger.valueOf(9).pow(tier.intValue()).longValue();
+            return String.format(java.util.Locale.US, "%,d", value);
+        }
+        // Too big for exact digits: show it as m \u00d7 10^e, using the block's log10 BCE (t * log10(9)).
+        return scientificFromLog10(CompressionConfig.bceMassLog(tier));
+    }
+
+    /**
+     * Renders a value given as its {@code log10} in proper scientific notation: a two-decimal mantissa in
+     * {@code [1,10)} followed by {@code \u00d7 10} and a superscript exponent (e.g. {@code 19.083 -> 1.22 \u00d7 10^{19}}).
+     * The mantissa comes from the fractional part of the log and the exponent from its floor; the rounding edge where
+     * the mantissa rounds up to {@code 10.00} is folded into a bumped exponent so it always reads {@code 1.00 \u00d7 10^{e+1}}.
+     */
+    private static String scientificFromLog10(double log10Amount) {
+        long exponent = (long) Math.floor(log10Amount);
+        double mantissa = Math.pow(10.0, log10Amount - exponent);
+        String mantissaStr = String.format(java.util.Locale.US, "%.2f", mantissa);
+        if (mantissaStr.equals("10.00")) {
+            mantissaStr = "1.00";
+            exponent += 1;
+        }
+        return mantissaStr + " \u00d7 10" + superscript(Long.toString(exponent));
+    }
+
     /** Builds the Latin multiplicative word for {@code n} (without the " Compressed Cobblestone" suffix). */
-    static String tupleWord(int n) {
+    public static String tupleWord(int n) {
         if (n < 1) {
             throw new IllegalArgumentException("Compression levels start at 1, got: " + n);
         }
@@ -173,6 +213,36 @@ public final class DisplayNames {
                 sb.append(SUPERSCRIPT[c - '0']);
             } else {
                 sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Renders a log10 BCE mass (a {@code double} holding {@code log10(amount)}) as a compact power-of-ten string for
+     * chat/tooltip readouts: whole exponents stay exact ({@code 10\u00b3}) and anything between shows one decimal
+     * ({@code 10\u00b9\u00b7\u2077}). An empty pool ({@link Double#NEGATIVE_INFINITY}) reads as {@code 0}.
+     */
+    public static String bceMagnitude(double log10Amount) {
+        if (log10Amount == Double.NEGATIVE_INFINITY || Double.isNaN(log10Amount) || log10Amount <= 0.0) {
+            return "0";
+        }
+        if (Math.abs(log10Amount - Math.rint(log10Amount)) < 1.0E-3D) {
+            return "10" + superscript(Long.toString(Math.round(log10Amount)));
+        }
+        return "10" + superscript(String.format(java.util.Locale.US, "%.1f", log10Amount));
+    }
+
+    /** Roman numeral for a small positive number (1..15); the pipe ladder's tier labels use this. */
+    public static String roman(int number) {
+        int[] values = {10, 9, 5, 4, 1};
+        String[] symbols = {"X", "IX", "V", "IV", "I"};
+        StringBuilder sb = new StringBuilder();
+        int remaining = Math.max(0, number);
+        for (int i = 0; i < values.length && remaining > 0; i++) {
+            while (remaining >= values[i]) {
+                sb.append(symbols[i]);
+                remaining -= values[i];
             }
         }
         return sb.toString();

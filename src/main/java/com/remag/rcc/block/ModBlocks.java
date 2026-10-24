@@ -1,11 +1,19 @@
 package com.remag.rcc.block;
 
 import com.remag.rcc.RCC;
+import com.remag.rcc.machine.BcePipeBlock;
+import com.remag.rcc.machine.BceStorageBlock;
+import com.remag.rcc.machine.CobblestoneGeneratorBlock;
 import com.remag.rcc.machine.CompressionCoreBlock;
+import com.remag.rcc.machine.CompressionAutoBlock;
+import com.remag.rcc.machine.CompressionAutoDecompressorBlock;
+import com.remag.rcc.machine.DecompressorCoreBlock;
+import com.remag.rcc.machine.GeneratorCoreBlock;
 import com.remag.rcc.machine.CompressionFrameBlock;
 import com.remag.rcc.machine.CompressionGlassBlock;
 import com.remag.rcc.machine.CompressionInterfaceBlock;
 import com.remag.rcc.machine.CompressionPortBlock;
+import com.remag.rcc.registry.CompressionConfig;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
@@ -68,6 +76,111 @@ public class ModBlocks {
                             .mapColor(MapColor.METAL)
                             .strength(3.0F)
                             .requiresCorrectToolForDrops()));
+
+    /**
+     * The tier-1 Decompression Manipulator's controller: the centre of the 3x3x3 multiblock that steps a compressed
+     * seed down toward a goal tier, banking the released BCE. Shares the shell blocks (frame / glass / port / interface)
+     * with the Compression Manipulator. Like {@link #CORE} it uses the non-cube core model, so it must not occlude.
+     */
+    public static final DeferredBlock<DecompressorCoreBlock> COMPRESSION_DECOMPRESSOR_CORE =
+            BLOCKS.register("compression_decompressor_core",
+                    () -> new DecompressorCoreBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(8.0F, 12.0F)
+                            .requiresCorrectToolForDrops()
+                            .noOcclusion()));
+
+    /**
+     * The single-block Auto-Compressor: automates the manual tier ladder up to tier 1000. Solid machine block that
+     * is directly interactive (it is its own GUI entry) and exposes fuel/output/energy capabilities on every face.
+     */
+    public static final DeferredBlock<CompressionAutoBlock> COMPRESSION_AUTO =
+            BLOCKS.register("compression_auto",
+                    () -> new CompressionAutoBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(5.0F, 6.0F)
+                            .requiresCorrectToolForDrops()));
+
+    /**
+     * The single-block Auto Decompressor: the reverse of the Auto-Compressor. Steps a compressed seed down to a
+     * player-selected goal tier, banking the released mass into a BCE buffer and ejecting the downgraded block.
+     */
+    public static final DeferredBlock<CompressionAutoDecompressorBlock> COMPRESSION_AUTO_DECOMPRESSOR =
+            BLOCKS.register("compression_auto_decompressor",
+                    () -> new CompressionAutoDecompressorBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(5.0F, 6.0F)
+                            .requiresCorrectToolForDrops()));
+
+    // --- BCE logistics -----------------------------------------------------------------------
+
+    /**
+     * BCE conduit segment. The tier and each end's direction live in the block state ({@code tier}, plus one
+     * {@code *_end} property per side - see {@link BcePipeBlock}) behind <em>one</em> item: the tier is crafted and
+     * carried on the stack's {@code block_state} component, and each of the six ends is pointed afterwards by
+     * right-clicking <em>that end</em> with a wrench. Connected segments form one
+     * {@link com.remag.rcc.energy.BceNetwork} bus.
+     *
+     * <p>{@code noOcclusion} is required by the art, not a preference: a pipe is a hub plus arms inside its own cube,
+     * so it must not cull the faces of the blocks around it.
+     */
+    public static final DeferredBlock<BcePipeBlock> BCE_PIPE =
+            BLOCKS.register("bce_pipe",
+                    () -> new BcePipeBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(3.0F)
+                            .requiresCorrectToolForDrops()
+                            .noOcclusion()));
+
+    /** A standalone BCE tank; passive storage whose flow is driven entirely by the pipes touching it. */
+    public static final DeferredBlock<BceStorageBlock> BCE_STORAGE =
+            BLOCKS.register("bce_storage",
+                    () -> new BceStorageBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(5.0F, 6.0F)
+                            .requiresCorrectToolForDrops()));
+
+    /**
+     * The tier-two BCE tank: the same passive block and block-entity type as {@link #BCE_STORAGE}, but sized to the
+     * multiblock band - one full tier-{@link CompressionConfig#MANIPULATOR_MAX_OUT} block's BCE, which is the kind of
+     * mass the tier-1 Decompression Manipulator's descents release and the tier-II pipes move.
+     */
+    public static final DeferredBlock<BceStorageBlock> BCE_STORAGE_2 =
+            BLOCKS.register("bce_storage_2",
+                    () -> new BceStorageBlock(BlockBehaviour.Properties.of()
+                                    .mapColor(MapColor.METAL)
+                                    .strength(5.0F, 6.0F)
+                                    .requiresCorrectToolForDrops(),
+                            CompressionConfig.BCE_STORAGE_2_CAPACITY_LOG));
+
+    // --- Cobblestone generators (progression gate) -------------------------------------------
+
+    /**
+     * The cobblestone generator. One block spans the whole output ladder through its {@code tier} state (see
+     * {@link com.remag.rcc.machine.GeneratorTier}): low rungs drip cobblestone items, high rungs mint raw BCE, all
+     * reaching automation through the item / {@code rcc:bce} capabilities.
+     */
+    public static final DeferredBlock<CobblestoneGeneratorBlock> COBBLESTONE_GENERATOR =
+            BLOCKS.register("cobblestone_generator",
+                    () -> new CobblestoneGeneratorBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(5.0F, 6.0F)
+                            .requiresCorrectToolForDrops()));
+
+    /**
+     * The tier-1 Generation Manipulator's controller: the sealed heart of the 3x3x4 generator tower that mints BCE
+     * on the {@code 9^n} curve from one tier-1000 block per second up to half a tier-{@code 10^12} block, burning
+     * escalating FE while it runs. The {@code rung} state carries the ladder position (see
+     * {@link com.remag.rcc.machine.GeneratorCoreTier}); like the other cores it uses a non-cube model, so it must
+     * not occlude.
+     */
+    public static final DeferredBlock<GeneratorCoreBlock> GENERATOR_CORE =
+            BLOCKS.register("generator_core",
+                    () -> new GeneratorCoreBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(8.0F, 12.0F)
+                            .requiresCorrectToolForDrops()
+                            .noOcclusion()));
 
     public static void register(IEventBus eventBus) {
         BLOCKS.register(eventBus);

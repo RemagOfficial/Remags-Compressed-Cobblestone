@@ -1,5 +1,6 @@
 package com.remag.rcc.machine;
 
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.StringRepresentable;
 
 /**
@@ -26,5 +27,10 @@ public enum PortType implements StringRepresentable {
     @Override
     public String getSerializedName() {
         return this.name;
+    }
+
+    /** Player-facing kind name for wrench feedback, e.g. {@code "Power"} (mirrors {@link BcePipeMode#displayName()}). */
+    public Component displayName() {
+        return Component.translatable("block.rcc.compression_port." + getSerializedName());
     }
 }

@@ -1,8 +1,16 @@
 package com.remag.rcc.machine;
 
+import com.remag.rcc.registry.ModItemTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.ItemInteractionResult;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.BlockItemStateProperties;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -14,6 +22,7 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -53,6 +62,37 @@ public class CompressionPortBlock extends Block implements EntityBlock {
             }
         }
         return this.defaultBlockState().setValue(PORT_TYPE, type);
+    }
+
+    /**
+     * Right-click with any wrench (the shared {@code c:tools/wrench} convention, see
+     * {@link com.remag.rcc.registry.ModItemTags}) cycles this port in place through Power &#8594; Item Input &#8594;
+     * Item Output, with no break and no item consumed - the same contract as {@link BcePipeBlock}'s wrench handling.
+     * The block entity re-reads {@link #PORT_TYPE} from its live state on every capability query, and both cores
+     * rescan their structure periodically, so a re-pointed port starts forwarding the new kind (and the formed flag
+     * notices if the swap broke the "at least one of each kind" rule) without anything else having to be touched.
+     */
+    @Override
+    protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
+                                              Player player, InteractionHand hand, BlockHitResult hitResult) {
+        if (!ModItemTags.isWrench(stack)) {
+            // Not a wrench: no special behaviour, ordinary placement against this port still works.
+            return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        }
+        if (!level.isClientSide()) {
+            PortType next = cycle(state.getValue(PORT_TYPE));
+            level.setBlockAndUpdate(pos, state.setValue(PORT_TYPE, next));
+            level.playSound(null, pos, SoundEvents.UI_BUTTON_CLICK.value(), SoundSource.BLOCKS, 0.5F, 1.0F);
+            player.displayClientMessage(
+                    Component.translatable("chat.rcc.port.cycled", next.displayName()), false);
+        }
+        return ItemInteractionResult.sidedSuccess(level.isClientSide());
+    }
+
+    /** Advance to the next kind (wrapping at the top): POWER -> ITEM_IN -> ITEM_OUT -> POWER. */
+    private static PortType cycle(PortType current) {
+        PortType[] all = PortType.values();
+        return all[(current.ordinal() + 1) % all.length];
     }
 
     @Nullable

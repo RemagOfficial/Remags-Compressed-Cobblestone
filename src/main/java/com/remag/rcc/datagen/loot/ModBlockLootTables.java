@@ -26,9 +26,28 @@ public class ModBlockLootTables extends BlockLootSubProvider {
         // which is not part of these stacks).
         for (Block structural : new Block[]{
                 ModBlocks.FRAME.get(), ModBlocks.GLASS.get(), ModBlocks.INTERFACE.get(),
-                ModBlocks.PORT.get(), ModBlocks.CORE.get()}) {
+                ModBlocks.PORT.get(), ModBlocks.CORE.get(), ModBlocks.COMPRESSION_DECOMPRESSOR_CORE.get(),
+                ModBlocks.COMPRESSION_AUTO.get(),
+                ModBlocks.COMPRESSION_AUTO_DECOMPRESSOR.get(), ModBlocks.BCE_STORAGE.get(),
+                ModBlocks.BCE_STORAGE_2.get()}) {
             this.add(structural, this.createSingleItemTable(structural.asItem()));
         }
+
+        // A pipe must come back as the variant that was placed, not as the block's default tier-1 all-off state: the
+        // block entity publishes its tier/mode as the block_state component, which this copies onto the drop.
+        this.add(ModBlocks.BCE_PIPE.get(),
+                this.createSingleItemTable(ModBlocks.BCE_PIPE.get().asItem())
+                        .apply(CopyComponentsFunction.copyComponents(CopyComponentsFunction.Source.BLOCK_ENTITY)));
+
+        // Same for the generator: its rung lives only in the block state, and the block entity publishes it as the
+        // block_state component, so a broken generator drops the tier it was rather than defaulting to BASE. The
+        // tier-1 generator multiblock's core rides the identical route for its GeneratorCoreTier rung.
+        this.add(ModBlocks.COBBLESTONE_GENERATOR.get(),
+                this.createSingleItemTable(ModBlocks.COBBLESTONE_GENERATOR.get().asItem())
+                        .apply(CopyComponentsFunction.copyComponents(CopyComponentsFunction.Source.BLOCK_ENTITY)));
+        this.add(ModBlocks.GENERATOR_CORE.get(),
+                this.createSingleItemTable(ModBlocks.GENERATOR_CORE.get().asItem())
+                        .apply(CopyComponentsFunction.copyComponents(CopyComponentsFunction.Source.BLOCK_ENTITY)));
     }
 
     @Override

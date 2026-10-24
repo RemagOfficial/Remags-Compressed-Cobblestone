@@ -1,7 +1,9 @@
 package com.remag.rcc.menu;
 
-import com.remag.rcc.machine.CompressionCoreBlockEntity;
-import com.remag.rcc.registry.CompressionConfig;
+import com.remag.rcc.machine.ICompressionMachine;
+import com.remag.rcc.machine.ICompressTarget;
+import com.remag.rcc.machine.IDecompressTarget;
+import com.remag.rcc.machine.IGoalTierTarget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
@@ -10,9 +12,12 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import net.neoforged.neoforge.items.SlotItemHandler;
 import org.jetbrains.annotations.Nullable;
+
+import java.math.BigInteger;
 
 /**
  * Backing container for the Compression Manipulator GUI, opened through a
@@ -41,25 +46,36 @@ public class CompressionCoreMenu extends AbstractContainerMenu implements Contai
     private static final int IDX_CURRENT = 6;
 
     @Nullable
-    private final CompressionCoreBlockEntity core;
+    private final ICompressionMachine machine;
     @Nullable
     private final BlockPos hostPos;
+    /** Client-side snapshot of the host machine's goal tier (compressor or decompressor) used to prefill the text
+     *  field; empty for every other machine. */
+    private final String goalTierDisplay;
     private final int[] data = new int[DATA_COUNT];
 
-    public CompressionCoreMenu(int containerId, Inventory playerInventory,
-                               @Nullable CompressionCoreBlockEntity core) {
-        super(ModMenus.CORE.get(), containerId);
-        this.core = core;
-        this.hostPos = core != null ? core.getBlockPos() : null;
+    public CompressionCoreMenu(int containerId, Inventory playerInventory, @Nullable ICompressionMachine machine) {
+        this(containerId, playerInventory, machine,
+                machine instanceof IGoalTierTarget d ? d.goalTierString() : "");
+    }
 
-        ItemStackHandler seedHandler = core != null ? core.getSeed() : new ItemStackHandler(1);
-        ItemStackHandler outputHandler = core != null ? core.getOutput() : new ItemStackHandler(1);
+    public CompressionCoreMenu(int containerId, Inventory playerInventory, @Nullable ICompressionMachine machine,
+                               String goalTierDisplay) {
+        super(ModMenus.CORE.get(), containerId);
+        this.machine = machine;
+        this.goalTierDisplay = goalTierDisplay == null ? "" : goalTierDisplay;
+        // Both machines are block entities, so the anchor position for stillValid comes from the BE cast; the
+        // interface itself deliberately stays free of world/position concerns.
+        this.hostPos = machine instanceof BlockEntity be ? be.getBlockPos() : null;
+
+        ItemStackHandler seedHandler = machine != null ? machine.getSeed() : new ItemStackHandler(1);
+        ItemStackHandler outputHandler = machine != null ? machine.getOutput() : new ItemStackHandler(1);
 
         // Machine slots (indexes 0 and 1) must come before the player inventory for quickMoveStack ranges.
         addSlot(new SlotItemHandler(seedHandler, 0, 61, 41) {
             @Override
             public boolean mayPlace(ItemStack stack) {
-                return CompressionCoreBlockEntity.isSeed(stack);
+                return machine == null ? ICompressionMachine.isSeed(stack) : machine.acceptsSeed(stack);
             }
         });
         addSlot(new SlotItemHandler(outputHandler, 0, 61, 83) {
@@ -88,23 +104,61 @@ public class CompressionCoreMenu extends AbstractContainerMenu implements Contai
     public static CompressionCoreMenu client(int containerId, Inventory playerInventory,
                                              RegistryFriendlyByteBuf buf) {
         BlockPos pos = buf.readBlockPos();
-        CompressionCoreBlockEntity core =
-                playerInventory.player.level().getBlockEntity(pos) instanceof CompressionCoreBlockEntity c ? c : null;
-        return new CompressionCoreMenu(containerId, playerInventory, core);
+        // The Auto Compressor and Auto Decompressor append their goal tier to the open buffer; other machines write
+        // only the position, so read the string only when extra bytes remain.
+        String goal = buf.readableBytes() > 0 ? buf.readUtf(64) : "";
+        ICompressionMachine machine =
+                playerInventory.player.level().getBlockEntity(pos) instanceof ICompressionMachine m ? m : null;
+        return new CompressionCoreMenu(containerId, playerInventory, machine, goal);
+    }
+
+    // --- Goal tier (Auto Compressor / Auto Decompressor) ---------------------------------------
+
+    /** True when the host machine offers a selectable goal tier (either Auto machine). Drives the text field. */
+    public boolean hasGoalField() {
+        return machine instanceof IGoalTierTarget;
+    }
+
+    /** True when the host is the Auto Decompressor (selects its panel art). */
+    public boolean isDecompressor() {
+        return machine instanceof IDecompressTarget;
+    }
+
+    /** True when the host is the Auto Compressor (selects its panel art). */
+    public boolean isCompressor() {
+        return machine instanceof ICompressTarget;
+    }
+
+    /** The goal tier used to prefill the screen's text field (a client-side snapshot from the open buffer). */
+    public String getGoalTierString() {
+        return goalTierDisplay;
+    }
+
+    /** Apply a client-submitted goal tier string to the machine (server side only; ignores malformed / non-target). */
+    public void setGoalTierFromClient(String raw) {
+        if (!(machine instanceof IGoalTierTarget target) || raw == null || raw.isBlank()) {
+            return;
+        }
+        try {
+            target.setGoalTier(new BigInteger(raw.trim()));
+        } catch (NumberFormatException ignored) {
+            // Leave the previous goal untouched on malformed input.
+        }
     }
 
     // --- Data mirror ---------------------------------------------------------------------------
 
     @Override
     public void broadcastChanges() {
-        if (core != null && core.getLevel() != null && !core.getLevel().isClientSide()) {
-            data[IDX_ENERGY] = core.getEnergy().getEnergyStored();
-            data[IDX_MAX_ENERGY] = CompressionConfig.ENERGY_CAPACITY;
-            data[IDX_PROGRESS] = core.getProgress();
-            data[IDX_PROGRESS_MAX] = CompressionConfig.TICKS_PER_CRAFT;
-            data[IDX_FORMED] = core.isFormed() ? 1 : 0;
-            data[IDX_REQUIRED] = Float.floatToRawIntBits((float) core.getRequiredFuel());
-            data[IDX_CURRENT] = Float.floatToRawIntBits((float) core.getFuelPool());
+        // Only the server instance reads real machine state; the client mirror is fed through setData below.
+        if (machine instanceof BlockEntity be && be.getLevel() != null && !be.getLevel().isClientSide()) {
+            data[IDX_ENERGY] = machine.getEnergy().getEnergyStored();
+            data[IDX_MAX_ENERGY] = machine.getEnergy().getMaxEnergyStored();
+            data[IDX_PROGRESS] = machine.getProgress();
+            data[IDX_PROGRESS_MAX] = machine.getProgressMax();
+            data[IDX_FORMED] = machine.isFormed() ? 1 : 0;
+            data[IDX_REQUIRED] = Float.floatToRawIntBits((float) machine.getRequiredFuel());
+            data[IDX_CURRENT] = Float.floatToRawIntBits((float) machine.getFuelPool());
         }
         super.broadcastChanges();
     }
@@ -177,7 +231,7 @@ public class CompressionCoreMenu extends AbstractContainerMenu implements Contai
             if (!moveItemStackTo(stack, PLAYER_INV_START, PLAYER_INV_END, true)) {
                 return ItemStack.EMPTY;
             }
-        } else if (CompressionCoreBlockEntity.isSeed(stack)) {
+        } else if (machine != null ? machine.acceptsSeed(stack) : ICompressionMachine.isSeed(stack)) {
             // Player inventory -> seed slot.
             if (!moveItemStackTo(stack, SEED_INDEX, SEED_INDEX + 1, false)) {
                 return ItemStack.EMPTY;

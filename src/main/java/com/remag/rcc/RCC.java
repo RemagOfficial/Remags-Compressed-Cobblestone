@@ -8,6 +8,7 @@ import com.remag.rcc.event.ClientEvents;
 import com.remag.rcc.event.CommonEvents;
 import com.remag.rcc.item.ModItems;
 import com.remag.rcc.menu.ModMenus;
+import com.remag.rcc.network.ModNetwork;
 import com.remag.rcc.recipe.ModRecipeSerializers;
 import com.remag.rcc.registry.ModDataComponents;
 import net.neoforged.api.distmarker.Dist;
@@ -38,6 +39,9 @@ public class RCC
 
         // Port block capabilities (energy / item handler) are needed on both sides.
         modEventBus.addListener(CommonEvents::registerCapabilities);
+
+        // Custom network payloads (the Auto Decompressor's goal-tier setter) are registered on both sides.
+        modEventBus.addListener(ModNetwork::register);
 
         // Runtime per-level tinting is client-only; guard so the class (and its client-only event types)
         // is never loaded on a dedicated server.

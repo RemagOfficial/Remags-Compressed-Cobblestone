@@ -31,17 +31,65 @@ public class ModItems {
             ITEMS.register("compression_glass",
                     () -> new BlockItem(ModBlocks.GLASS.get(), new Item.Properties()));
 
+    /** The one port item; the kind it places as comes from the stack's {@code block_state} component (defaults to POWER). */
     public static final DeferredItem<Item> COMPRESSION_PORT =
             ITEMS.register("compression_port",
-                    () -> new BlockItem(ModBlocks.PORT.get(), new Item.Properties()));
+                    () -> new CompressionPortItem(ModBlocks.PORT.get(), new Item.Properties()));
 
     public static final DeferredItem<Item> COMPRESSION_CORE =
             ITEMS.register("compression_core",
                     () -> new BlockItem(ModBlocks.CORE.get(), new Item.Properties()));
 
+    public static final DeferredItem<Item> COMPRESSION_DECOMPRESSOR_CORE =
+            ITEMS.register("compression_decompressor_core",
+                    () -> new BlockItem(ModBlocks.COMPRESSION_DECOMPRESSOR_CORE.get(), new Item.Properties()));
+
     public static final DeferredItem<Item> COMPRESSION_INTERFACE =
             ITEMS.register("compression_interface",
                     () -> new BlockItem(ModBlocks.INTERFACE.get(), new Item.Properties()));
+
+    public static final DeferredItem<Item> COMPRESSION_AUTO =
+            ITEMS.register("compression_auto",
+                    () -> new BlockItem(ModBlocks.COMPRESSION_AUTO.get(), new Item.Properties()));
+
+    public static final DeferredItem<Item> COMPRESSION_AUTO_DECOMPRESSOR =
+            ITEMS.register("compression_auto_decompressor",
+                    () -> new BlockItem(ModBlocks.COMPRESSION_AUTO_DECOMPRESSOR.get(), new Item.Properties()));
+
+    // --- BCE logistics -------------------------------------------------------------------------
+
+    /** The one pipe item; tier and mode come from the stack's {@code block_state} component. */
+    public static final DeferredItem<Item> BCE_PIPE =
+            ITEMS.register("bce_pipe",
+                    () -> new BcePipeItem(ModBlocks.BCE_PIPE.get(), new Item.Properties()));
+
+    public static final DeferredItem<Item> BCE_STORAGE =
+            ITEMS.register("bce_storage",
+                    () -> new BlockItem(ModBlocks.BCE_STORAGE.get(), new Item.Properties()));
+
+    /** The tier-two tank; same block class, bigger pool (sized on the block, not the item). */
+    public static final DeferredItem<Item> BCE_STORAGE_2 =
+            ITEMS.register("bce_storage_2",
+                    () -> new BlockItem(ModBlocks.BCE_STORAGE_2.get(), new Item.Properties()));
+
+    /** The generator item; its rung comes from the stack's {@code block_state} component (defaults to BASE). */
+    public static final DeferredItem<Item> COBBLESTONE_GENERATOR =
+            ITEMS.register("cobblestone_generator",
+                    () -> new CobblestoneGeneratorItem(ModBlocks.COBBLESTONE_GENERATOR.get(), new Item.Properties()));
+
+    /** The tier-1 generator multiblock's core; its rung comes from the stack's {@code block_state} component. */
+    public static final DeferredItem<Item> GENERATOR_CORE =
+            ITEMS.register("generator_core",
+                    () -> new GeneratorCoreItem(ModBlocks.GENERATOR_CORE.get(), new Item.Properties()));
+
+    /**
+     * The configuration tool: right-click a BCE pipe with it to flip that end between extract and insert. It carries
+     * no logic of its own - the blocks it can configure are found through the shared {@code c:tools/wrench}
+     * convention tag (see {@link com.remag.rcc.registry.ModItemTags}), which our datagen also publishes this item
+     * onto, so this wrench works on other mods' machines and theirs work on ours.
+     */
+    public static final DeferredItem<Item> WRENCH =
+            ITEMS.register("wrench", () -> new Item(new Item.Properties().stacksTo(1)));
 
     public static void register(IEventBus eventBus) {
         ITEMS.register(eventBus);

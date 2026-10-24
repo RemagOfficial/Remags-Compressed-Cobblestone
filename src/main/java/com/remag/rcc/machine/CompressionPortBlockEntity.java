@@ -1,6 +1,7 @@
 package com.remag.rcc.machine;
 
 import com.remag.rcc.block.entity.ModBlockEntities;
+import com.remag.rcc.energy.IBceStorage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
@@ -11,10 +12,13 @@ import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The block entity behind a {@link CompressionPortBlock}. It stores nothing itself: it locates the multiblock
- * {@link CompressionCoreBlockEntity} (the core is always within the structure radius of any shell cell) and
- * exposes, per {@link PortType}, either the core's energy buffer (POWER), a fuel sink that feeds the core's
- * mass pool (ITEM_IN), or the core's output handler (ITEM_OUT).
+ * The block entity behind a {@link CompressionPortBlock}. It stores nothing itself: it locates whichever multiblock
+ * {@link IMultiblockPortHost} seals the centre of its structure (the core is always within the maximum structure
+ * radius of any shell cell) and forwards, per {@link PortType}, the capability the host offers for that kind -
+ * energy (POWER), an item handler (ITEM_IN / ITEM_OUT), and BCE (whatever the host exposes, e.g. the compressor's
+ * fuel sink on ITEM_IN, the decompressor's buffer on its item ports, or the tier-1 generator's one-way mint on
+ * ITEM_OUT). One port block therefore serves the 5x5x5 Compression Manipulator, the 3x3x3 Decompression Manipulator,
+ * and the 3x3x4 generator tower alike.
  */
 public class CompressionPortBlockEntity extends BlockEntity {
     @Nullable
@@ -28,31 +32,22 @@ public class CompressionPortBlockEntity extends BlockEntity {
         return getBlockState().getValue(CompressionPortBlock.PORT_TYPE);
     }
 
-    /** Find (and cache) the core this port belongs to, re-scanning if the cached one is gone. */
+    /** Find (and cache) the host this port belongs to, re-scanning if the cached one is gone. */
     @Nullable
-    public CompressionCoreBlockEntity resolveCore() {
+    public IMultiblockPortHost resolveHost() {
         Level level = this.level;
         if (level == null) {
             return null;
         }
-        if (cachedCorePos != null && level.getBlockEntity(cachedCorePos) instanceof CompressionCoreBlockEntity cached) {
+        if (cachedCorePos != null && level.getBlockEntity(cachedCorePos) instanceof IMultiblockPortHost cached) {
             return cached;
         }
         cachedCorePos = null;
-        int r = com.remag.rcc.registry.CompressionConfig.REGION_RADIUS;
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    BlockPos p = worldPosition.offset(dx, dy, dz);
-                    if (level.getBlockState(p).is(com.remag.rcc.block.ModBlocks.CORE.get())
-                            && level.getBlockEntity(p) instanceof CompressionCoreBlockEntity core) {
-                        cachedCorePos = p;
-                        return core;
-                    }
-                }
-            }
+        IMultiblockPortHost host = IMultiblockPortHost.findPortHost(level, worldPosition);
+        if (host instanceof BlockEntity be) {
+            cachedCorePos = be.getBlockPos();
         }
-        return null;
+        return host;
     }
 
     @Nullable
@@ -60,20 +55,20 @@ public class CompressionPortBlockEntity extends BlockEntity {
         if (portType() != PortType.POWER) {
             return null;
         }
-        CompressionCoreBlockEntity core = resolveCore();
-        return core == null ? null : core.getEnergy();
+        IMultiblockPortHost host = resolveHost();
+        return host == null ? null : host.getEnergy();
     }
 
     @Nullable
     public IItemHandler getItemCapability(@Nullable Direction side) {
-        CompressionCoreBlockEntity core = resolveCore();
-        if (core == null) {
-            return null;
-        }
-        return switch (portType()) {
-            case ITEM_OUT -> core.getOutput();
-            case ITEM_IN -> new FuelInsertHandler(core);
-            case POWER -> null;
-        };
+        IMultiblockPortHost host = resolveHost();
+        return host == null ? null : host.portItemHandler(portType());
+    }
+
+    /** The BCE store this port forwards to its host, or {@code null} when that kind carries none. */
+    @Nullable
+    public IBceStorage getBceCapability(@Nullable Direction side) {
+        IMultiblockPortHost host = resolveHost();
+        return host == null ? null : host.portBceHandler(portType());
     }
 }

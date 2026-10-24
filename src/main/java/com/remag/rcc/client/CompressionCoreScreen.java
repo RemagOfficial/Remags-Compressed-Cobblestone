@@ -2,12 +2,17 @@ package com.remag.rcc.client;
 
 import com.remag.rcc.RCC;
 import com.remag.rcc.menu.CompressionCoreMenu;
+import com.remag.rcc.network.BceGoalTierPayload;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
+import net.neoforged.neoforge.network.PacketDistributor;
+import org.jetbrains.annotations.Nullable;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.Locale;
@@ -26,6 +31,14 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
 
     private static final ResourceLocation TEXTURE =
             ResourceLocation.fromNamespaceAndPath(RCC.MODID, "textures/gui/container/compression_core.png");
+    // The Auto Compressor and Auto Decompressor share this screen but each has its own sheet: identical gauge wells
+    // and slot positions, plus a small notch between the input and output slots that marks where the goal-tier text
+    // box sits. The compressor sheet is art-identical to the decompressor's; it is a separate file only for
+    // organisation, so the same field geometry lines up on both.
+    private static final ResourceLocation DECOMPRESSOR_TEXTURE =
+            ResourceLocation.fromNamespaceAndPath(RCC.MODID, "textures/gui/container/decompressor.png");
+    private static final ResourceLocation COMPRESSOR_TEXTURE =
+            ResourceLocation.fromNamespaceAndPath(RCC.MODID, "textures/gui/container/compressor.png");
     // Separate fill strip (64x77): three bottom-up bar graphics side by side - cobblestone (fuel), solid green
     // (craft progress), red (energy). White separator lines sit at x=20/40/60; the coloured interior is y=4..72.
     private static final ResourceLocation FILL_TEXTURE =
@@ -47,6 +60,10 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
     private static final int PROG_X = 102;
     private static final int POWER_X = 139;
 
+    // Goal-tier input for the Auto Compressor / Auto Decompressor (null for the manipulator).
+    @Nullable
+    private EditBox goalField;
+
     public CompressionCoreScreen(CompressionCoreMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
         this.imageWidth = 176;
@@ -56,13 +73,58 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
     }
 
     @Override
+    protected void init() {
+        super.init();
+        if (this.menu.hasGoalField()) {
+            // The goal-tier number, typed and sent on Enter. It is a normal bordered field, centred on the notch
+            // baked into the Auto machines' sheets (x56..81, y65..73) so the box reads as its alignment guide - the
+            // field covers it, so the drawn box never shows. There is no separate text label (no room beside it).
+            EditBox field = new EditBox(this.font, this.leftPos + 48, this.topPos + 63, 40, 12,
+                    Component.translatable("container.rcc.compression_core.goal"));
+            field.setMaxLength(16);
+            field.setBordered(true);
+            field.setValue(this.menu.getGoalTierString());
+            field.setFilter(s -> s.isEmpty() || s.chars().allMatch(Character::isDigit));
+            field.setHint(Component.literal("0").withStyle(ChatFormatting.GRAY).copy());
+            this.goalField = this.addRenderableWidget(field);
+        } else {
+            this.goalField = null;
+        }
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (this.goalField != null && this.goalField.isFocused()
+                && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
+            this.sendGoalTier();
+            this.goalField.setFocused(false);
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    /** Push the typed goal tier to the server; blank input is ignored (the machine keeps its current goal). */
+    private void sendGoalTier() {
+        if (this.goalField == null) {
+            return;
+        }
+        String value = this.goalField.getValue().trim();
+        if (!value.isEmpty()) {
+            PacketDistributor.sendToServer(new BceGoalTierPayload(value));
+        }
+    }
+
+    @Override
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         int x = this.leftPos;
         int y = this.topPos;
 
-        // Panel + baked bar wells from the main sheet. The 9-arg blit carries the real 176x202 texture size so the
-        // art is drawn 1:1 (the 7-arg overload would assume a 256x256 sheet and mis-scale it).
-        graphics.blit(TEXTURE, x, y, 0.0F, 0.0F, this.imageWidth, this.imageHeight, this.imageWidth, this.imageHeight);
+        // Panel + baked bar wells from the main sheet. Each Auto machine has its own sheet (both add the goal-tier box
+        // notch); the manipulator uses the base sheet. The 9-arg blit carries the real 176x202 texture size so the art
+        // is drawn 1:1 (the 7-arg overload would assume a 256x256 sheet and mis-scale it).
+        ResourceLocation background = this.menu.isCompressor() ? COMPRESSOR_TEXTURE
+                : this.menu.isDecompressor() ? DECOMPRESSOR_TEXTURE : TEXTURE;
+        graphics.blit(background, x, y, 0.0F, 0.0F, this.imageWidth, this.imageHeight, this.imageWidth, this.imageHeight);
 
         // Fuel gauge (cobblestone, cropped bottom-up by current/required mass in log10 space).
         blitBarCrop(graphics, x + FUEL_X, y + BAR_Y, FUEL_U, fuelFraction());
@@ -202,5 +264,7 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
             int bx = (this.imageWidth - this.font.width(warning)) / 2;
             graphics.drawString(this.font, warning, bx, this.inventoryLabelY, 0xFFFF8080, false);
         }
+        // No goal-tier text label: the decompressor's bordered field sits over the notch baked into its own sheet,
+        // and there is no room beside it (the fuel gauge is to the left) for a "Goal tier:" caption.
     }
 }

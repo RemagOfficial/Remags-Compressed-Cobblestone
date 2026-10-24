@@ -2,6 +2,7 @@ package com.remag.rcc.machine;
 
 import com.remag.rcc.block.ModBlocks;
 import com.remag.rcc.block.entity.ModBlockEntities;
+import com.remag.rcc.energy.IBceStorage;
 import com.remag.rcc.item.ModItems;
 import com.remag.rcc.menu.CompressionCoreMenu;
 import com.remag.rcc.registry.CompressionConfig;
@@ -19,11 +20,11 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.energy.IEnergyStorage;
+import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import org.jetbrains.annotations.Nullable;
 
@@ -41,7 +42,7 @@ import java.util.Objects;
  * {@link CompressionConfig#MANIPULATOR_MAX_OUT}, enough fuel mass has been fed, and enough FE is stored. On
  * start the seed and the whole fuel pool are consumed and FE drains across the craft.
  */
-public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvider {
+public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvider, ICompressionMachine, IMultiblockController {
     private static final String TAG_SEED = "seed";
     private static final String TAG_OUTPUT = "output";
     private static final String TAG_ENERGY = "energy";
@@ -51,6 +52,8 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
     private static final String TAG_PENDING = "pendingResult";
     /** Update-tag-only key carrying the seed tier the client BER should render as the spinning cube. */
     private static final String TAG_RENDER_SEED = "renderSeed";
+    /** Key for the finished-cycle counter, persisted and synced so the client can pulse once per completion. */
+    private static final String TAG_CRAFTS_DONE = "craftsDone";
 
     private static final int RESCAN_INTERVAL = 20;
 
@@ -94,6 +97,61 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
     /** Accumulated fuel mass in log10-base-cobblestone space; {@link Double#NEGATIVE_INFINITY} means empty. */
     private double fuelPool = Double.NEGATIVE_INFINITY;
+    /**
+     * The BCE face of {@link #fuelPool}, handed to an ITEM_IN port so a pipe can burn BCE as fuel exactly the way a
+     * hopper feeds cobblestone items in - one BCE is one vanilla cobblestone, the same mass the pool already counts
+     * in. A pure sink: {@link IBceStorage#canExtract()} is false, so fuel delivered down a line can never be pulled
+     * back out and a loop cannot launder itself. Accepted <em>partially</em> up to
+     * {@link CompressionConfig#MANIPULATOR_BCE_CAPACITY_LOG}, an effectively-unlimited ceiling matched to the giant
+     * tiers this machine runs at.
+     */
+    private final IBceStorage bceFuelView = new IBceStorage() {
+        @Override
+        public double getBceStoredLog() {
+            return CompressionCoreBlockEntity.this.fuelPool;
+        }
+
+        @Override
+        public double getMaxBceLog() {
+            return CompressionConfig.MANIPULATOR_BCE_CAPACITY_LOG;
+        }
+
+        @Override
+        public double receiveBce(double amountLog, boolean simulate) {
+            if (!canReceive() || amountLog == Double.NEGATIVE_INFINITY) {
+                return Double.NEGATIVE_INFINITY;
+            }
+            double free = CompressionConfig.log10subtract(
+                    CompressionConfig.MANIPULATOR_BCE_CAPACITY_LOG, CompressionCoreBlockEntity.this.fuelPool);
+            if (free == Double.NEGATIVE_INFINITY) {
+                return Double.NEGATIVE_INFINITY; // pool full: nothing a bus pushes will land until it is spent
+            }
+            double accepted = Math.min(amountLog, free);
+            if (!simulate) {
+                double merged = CompressionConfig.log10add(
+                        CompressionCoreBlockEntity.this.fuelPool, accepted);
+                CompressionCoreBlockEntity.this.fuelPool =
+                        Math.min(merged, CompressionConfig.MANIPULATOR_BCE_CAPACITY_LOG);
+                setChanged();
+            }
+            return accepted;
+        }
+
+        @Override
+        public double extractBce(double amountLog, boolean simulate) {
+            return Double.NEGATIVE_INFINITY; // fuel is one-way
+        }
+
+        @Override
+        public boolean canReceive() {
+            return true;
+        }
+
+        @Override
+        public boolean canExtract() {
+            return false;
+        }
+    };
     /** 0 when idle, otherwise counting up to {@link CompressionConfig#TICKS_PER_CRAFT}. */
     private int progress = 0;
     /** Result tier of an in-progress craft, so a reload can finish what it started. */
@@ -115,10 +173,42 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
     @Nullable
     private BigInteger clientSeedTier = null;
 
+    /** Bumped by the server each time a cycle finishes; synced so the client can fire a one-shot completion pulse. */
+    private int craftsCompleted = 0;
+    /** Client-side mirror of {@link #craftsCompleted}, refreshed by every update tag. */
+    private int clientCraftsDone = 0;
+
+    // --- Client-only render bookkeeping (read/written by client.CompressionCoreRenderer) --------
+    /** Game time before which the next lightning volley is due; staggers the zap storm. */
+    public long clientNextZapTick;
+    /**
+     * Completion count the client has already pulsed for; {@code -1} until first sight, so joining a machine that ran
+     * earlier cycles never replays a stale pulse and only a genuine increment lights one off.
+     */
+    public int clientPulseBaseline = -1;
+
+    /** Client mirror of the finished-cycle counter; compare against {@link #clientPulseBaseline} to detect one. */
+    public int getCraftsCompleted() {
+        return this.clientCraftsDone;
+    }
+
     private int rescanCooldown = 0;
 
     public CompressionCoreBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.COMPRESSION_CORE.get(), pos, state);
+    }
+
+    /**
+     * The core is what makes the shell's ports answer, and a cable or pipe that queried one before this block
+     * existed cached that empty answer (see {@link IMultiblockPortHost#invalidatePortCaps}) - so a Manipulator built
+     * core-last would otherwise never take fuel or power until its chunk reloaded.
+     */
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (this.level != null) {
+            IMultiblockPortHost.invalidatePortCaps(this.level, this.worldPosition);
+        }
     }
 
     // --- Capability / GUI accessors ------------------------------------------------------------
@@ -148,6 +238,32 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         return seed;
     }
 
+    // --- IMultiblockController: what the shell ports forward -----------------------------------
+
+    /**
+     * ITEM_IN is a fuel sink (a {@link FuelInsertHandler} that burns fed stacks into {@link #fuelPool}), ITEM_OUT
+     * exposes the finished block, and POWER carries no items.
+     */
+    @Override
+    @Nullable
+    public IItemHandler portItemHandler(PortType type) {
+        return switch (type) {
+            case ITEM_OUT -> output;
+            case ITEM_IN -> new FuelInsertHandler(this);
+            case POWER -> null;
+        };
+    }
+
+    /**
+     * Only ITEM_IN carries BCE: the sink-only {@link #bceFuelView}, so an insert-mode pipe end can burn BCE as fuel.
+     * POWER and ITEM_OUT return {@code null} (this machine takes mass in as fuel and only ever emits finished blocks).
+     */
+    @Override
+    @Nullable
+    public IBceStorage portBceHandler(PortType type) {
+        return type == PortType.ITEM_IN ? bceFuelView : null;
+    }
+
     public boolean isFormed() {
         return formed;
     }
@@ -158,6 +274,11 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
     public int getProgress() {
         return progress;
+    }
+
+    @Override
+    public int getProgressMax() {
+        return CompressionConfig.TICKS_PER_CRAFT;
     }
 
     /** Seed tier the client BER should render as the spinning cube, or {@code null} when there is nothing to show. */
@@ -189,13 +310,12 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
     // --- Fuel intake (driven by ITEM_IN ports) -------------------------------------------------
 
     public static boolean isFuel(ItemStack stack) {
-        return !stack.isEmpty()
-                && (stack.is(ModItems.COMPRESSED_COBBLESTONE.get()) || stack.is(Items.COBBLESTONE));
+        return ICompressionMachine.isFuel(stack);
     }
 
     /** Only a compressed-cobblestone item may sit in the seed slot (vanilla cobblestone is fuel-only). */
     public static boolean isSeed(ItemStack stack) {
-        return !stack.isEmpty() && stack.is(ModItems.COMPRESSED_COBBLESTONE.get());
+        return ICompressionMachine.isSeed(stack);
     }
 
     /**
@@ -219,14 +339,22 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
     // --- Cycle logic ---------------------------------------------------------------------------
 
     private boolean canStart() {
-        if (!formed || progress > 0 || !output.getStackInSlot(0).isEmpty()) {
+        if (!formed || progress > 0) {
             return false;
         }
         BigInteger n = seedTier();
         if (n == null || n.compareTo(CompressionConfig.MANIPULATOR_MIN_IN) < 0) {
             return false;
         }
-        if (n.shiftLeft(1).compareTo(CompressionConfig.MANIPULATOR_MAX_OUT) > 0) {
+        BigInteger out = n.shiftLeft(1);
+        if (out.compareTo(CompressionConfig.MANIPULATOR_MAX_OUT) > 0) {
+            return false;
+        }
+        // The output slot now accumulates a stack of results, so a craft may start whenever the finished item would
+        // still fit: a same-tier stack merges toward its max size, and only a genuinely full (or foreign-tier) slot
+        // blocks. Ports only ever extract from the output, so it can only shrink mid-cycle - room verified here at the
+        // start is still guaranteed at completion.
+        if (!output.insertItem(0, tierStack(out), true).isEmpty()) {
             return false;
         }
         if (!(fuelPool >= CompressionConfig.requiredMassLog(n))) {
@@ -256,11 +384,14 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
     private void completeCraft() {
         BigInteger result = this.pendingResult;
-        if (result != null && output.getStackInSlot(0).isEmpty()) {
-            output.setStackInSlot(0, tierStack(result));
+        if (result != null) {
+            // Merge into whatever the output slot already holds (same-tier results stack together); canStart only
+            // lets a cycle run when there was room, so this always absorbs the single produced item.
+            output.insertItem(0, tierStack(result), false);
         }
         this.pendingResult = null;
         this.progress = 0;
+        this.craftsCompleted++;
         setChanged();
         sync();
     }
@@ -444,6 +575,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         tag.putDouble(TAG_FUEL_POOL, fuelPool);
         tag.putInt(TAG_PROGRESS, progress);
         tag.putBoolean(TAG_FORMED, formed);
+        tag.putInt(TAG_CRAFTS_DONE, this.craftsCompleted);
         if (pendingResult != null) {
             tag.putString(TAG_PENDING, pendingResult.toString());
         }
@@ -462,6 +594,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         this.fuelPool = tag.contains(TAG_FUEL_POOL) ? tag.getDouble(TAG_FUEL_POOL) : Double.NEGATIVE_INFINITY;
         this.progress = tag.getInt(TAG_PROGRESS);
         this.formed = tag.getBoolean(TAG_FORMED);
+        this.craftsCompleted = tag.getInt(TAG_CRAFTS_DONE);
         this.pendingResult = tag.contains(TAG_PENDING) ? new BigInteger(tag.getString(TAG_PENDING)) : null;
         // Re-derive the render tier after a (re)load. A running craft stores its result as pendingResult = seed << 1,
         // so the seed the cube should show is pendingResult >> 1. Without this, rejoining mid-craft leaves
@@ -478,6 +611,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         tag.putInt(TAG_PROGRESS, progress);
         tag.putBoolean(TAG_FORMED, formed);
         tag.putDouble(TAG_FUEL_POOL, fuelPool);
+        tag.putInt(TAG_CRAFTS_DONE, this.craftsCompleted);
         if (this.renderSeedTier != null) {
             tag.putString(TAG_RENDER_SEED, this.renderSeedTier.toString());
         }
@@ -489,6 +623,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         this.progress = tag.getInt(TAG_PROGRESS);
         this.formed = tag.getBoolean(TAG_FORMED);
         this.fuelPool = tag.getDouble(TAG_FUEL_POOL);
+        this.clientCraftsDone = tag.getInt(TAG_CRAFTS_DONE);
         this.clientSeedTier = tag.contains(TAG_RENDER_SEED) ? new BigInteger(tag.getString(TAG_RENDER_SEED)) : null;
     }
 
