@@ -52,14 +52,19 @@ final class Progression {
      * {@code n} - the only way to tell one tier from another, since every level is the same item. Non-strict is not a
      * concern here: a component predicate always compares whole values.
      */
-    static Criterion<InventoryChangeTrigger.TriggerInstance> hasCompressedTier(int n) {
+    static Criterion<InventoryChangeTrigger.TriggerInstance> hasCompressedTier(BigInteger n) {
         ItemPredicate predicate = ItemPredicate.Builder.item()
                 .of(ModItems.COMPRESSED_COBBLESTONE.get())
                 .hasComponents(DataComponentPredicate.builder()
-                        .expect(ModDataComponents.COMPRESSION_LEVEL.get(), BigInteger.valueOf(n))
+                        .expect(ModDataComponents.COMPRESSION_LEVEL.get(), n)
                         .build())
                 .build();
         return InventoryChangeTrigger.TriggerInstance.hasItems(predicate);
+    }
+
+    /** {@link #hasCompressedTier(BigInteger)} for the band-0 ladder, whose gates are small enough to be {@code int}s. */
+    static Criterion<InventoryChangeTrigger.TriggerInstance> hasCompressedTier(int n) {
+        return hasCompressedTier(BigInteger.valueOf(n));
     }
 
     /**
@@ -75,10 +80,17 @@ final class Progression {
      * The tier-{@code n} compressed cobblestone as a recipe ingredient (the gate block spent to build a generator).
      * Matched on the {@code compression_level} component so a lower tier cannot stand in for the milestone the rung
      * demands - the same exact-value match {@link ModRecipeProvider}'s pipe ladder uses for {@code block_state}.
+     * The tier is a {@link BigInteger} because the band table's ceilings are: band 0 and band 1 gates fit an
+     * {@code int}, and every band from 2 up does not.
      */
-    static Ingredient compressedTierIngredient(int n) {
+    static Ingredient compressedTierIngredient(BigInteger n) {
         return DataComponentIngredient.of(false, ModDataComponents.COMPRESSION_LEVEL.get(),
-                BigInteger.valueOf(n), ModItems.COMPRESSED_COBBLESTONE.get());
+                n, ModItems.COMPRESSED_COBBLESTONE.get());
+    }
+
+    /** {@link #compressedTierIngredient(BigInteger)} for an {@code int}-sized gate. */
+    static Ingredient compressedTierIngredient(int n) {
+        return compressedTierIngredient(BigInteger.valueOf(n));
     }
 
     /** A generator stack preset to one rung through its {@code block_state} component - the recipe result / icon. */
@@ -93,9 +105,14 @@ final class Progression {
      * A tier-{@code n} compressed cobblestone stack carrying the {@code compression_level} data component. Used as the
      * advancement icon so the visual matches what the criterion actually asks for.
      */
-    static ItemStack compressedCobblestoneStack(int n) {
+    static ItemStack compressedCobblestoneStack(BigInteger n) {
         ItemStack stack = new ItemStack(ModItems.COMPRESSED_COBBLESTONE.get());
-        stack.set(ModDataComponents.COMPRESSION_LEVEL.get(), BigInteger.valueOf(n));
+        stack.set(ModDataComponents.COMPRESSION_LEVEL.get(), n);
         return stack;
+    }
+
+    /** {@link #compressedCobblestoneStack(BigInteger)} for an {@code int}-sized tier. */
+    static ItemStack compressedCobblestoneStack(int n) {
+        return compressedCobblestoneStack(BigInteger.valueOf(n));
     }
 }

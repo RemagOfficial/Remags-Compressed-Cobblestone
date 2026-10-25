@@ -39,11 +39,13 @@ import java.util.List;
  * <p>The cube is drawn through the {@link ItemRenderer} using {@link ItemDisplayContext#NONE}, which renders the
  * block item as a real 3D cube. Its per-tier colour comes from the registered item colour handler
  * ({@link com.remag.rcc.event.ClientEvents}): the seed's {@code tintindex} quads are multiplied by
- * {@link com.remag.rcc.registry.CompressionConfig#tintArgb(java.math.BigInteger)}, so higher tiers render darker.
- * Note this is a grayscale multiply, so a low tier (e.g. tier 1000, brightness ~0.75) looks only slightly darker
- * than plain cobblestone while very high tiers darken dramatically. We render through the ordinary item path with
- * the real {@link MultiBufferSource} - do NOT wrap the buffer source to force a colour, since the game's
- * {@code BufferSource} is stateful and its batch bookkeeping relies on getting its own consumer back.
+ * {@link com.remag.rcc.registry.CompressionConfig#tintArgb(java.math.BigInteger)}, so the cube wears the band ramp:
+ * grayscale and darkening through band 0, climbing back out of black through band 1, then one hue per band after that.
+ * Note the tint is still a multiply, so the cube can only ever look <em>darker</em> than its sprite - which is why the
+ * sprite is a brightened derivative (see {@link com.remag.rcc.registry.CompressionConfig#TINT_BASE_GREY}). We render
+ * through the ordinary item path with the real {@link MultiBufferSource} - do NOT wrap the buffer source to force a
+ * colour, since the game's {@code BufferSource} is stateful and its batch bookkeeping relies on getting its own
+ * consumer back.
  *
  * <p>The tier is read from the client-synced {@link CompressionCoreBlockEntity#getRenderSeedTier()}, which the core
  * captures at craft start (and keeps frozen across the cycle), so the cube shows whether the machine is idle or busy.

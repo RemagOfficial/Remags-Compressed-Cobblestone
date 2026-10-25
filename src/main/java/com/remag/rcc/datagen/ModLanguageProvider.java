@@ -45,8 +45,17 @@ public class ModLanguageProvider extends LanguageProvider {
         // from the rung's rate plus a mode hint. No per-tier lang keys are needed - the item derives them at runtime.
         addBlock(ModBlocks.COBBLESTONE_GENERATOR, "Cobblestone Generator");
         add("tooltip.rcc.generator.rate", "Output: %s");
+        // The same line split into its two text parts for the drawn tooltip: ClientTowerTooltip paints the label,
+        // then the raised 9^n stack, then the unit back on the baseline - so no "%s" slot is involved.
+        add("tooltip.rcc.generator.rate.label", "Output:");
+        add("tooltip.rcc.generator.rate.unit", "BCE/sec");
         add("tooltip.rcc.generator.hint.items", "Emits cobblestone items - extract with a hopper or item pipe.");
         add("tooltip.rcc.generator.hint.bce", "Emits raw BCE - drain it with an extract-mode BCE pipe.");
+        // The D23 array rule, explained in prose because a single machine cannot measure its own stackability: N
+        // generators on one BCE bus add their exponents, not their masses, so 2^(band+1) top towers mint a whole
+        // band-max block per second. Shown on the BCE-producing rungs of both generator items.
+        add("tooltip.rcc.generator.array",
+                "Stack 2^(band+1) towers on one BCE bus to mint a whole band-max block per second");
         add("chat.rcc.generator.cycled", "Generator %1$s - %2$s");
         // The tier-1 generator multiblock: one core block whose rung suffixes are composed at runtime by
         // GeneratorCoreItem (like the single generator above), a shared rate tooltip line, its own FE price line,
@@ -58,8 +67,10 @@ public class ModLanguageProvider extends LanguageProvider {
                 "Sealed inside a 3x3x4 frame-and-glass tower with a 1x1 air shaft above or below the core: 1+ Power port, exactly 1 Item-Output (BCE-out) port, and exactly 1 Interface panel (right-click it for status)");
         add("chat.rcc.generator_core.status", "Generator Core %1$s - %2$s");
         // BCE value readout shared by the compressed-cobblestone item tooltip and the vanilla-cobblestone tooltip hook
-        // (vanilla shows "BCE: 1"). The value string is composed in DisplayNames.bceValueText.
+        // (vanilla shows "BCE: 1"). The value string is composed in DisplayNames.bceValueText. The label-only variant
+        // fronts the drawn tower on the compressed tiers, where the number is painted instead of formatted into a string.
         add("tooltip.rcc.bce", "BCE: %s");
+        add("tooltip.rcc.bce.label", "BCE:");
         // Cobblestone-generator progression line: one advancement per rung. The titles/descriptions come from the very
         // helpers ModAdvancementProvider uses to build the chain, so the lang text and the generated JSON can never
         // drift apart. BASE is the hand-named root ("Only the Beginning"); every other rung is named for the milestone
@@ -78,7 +89,8 @@ public class ModLanguageProvider extends LanguageProvider {
         // rather than the whole segment. The no-link message answers a click on an end that touches nothing.
         add("chat.rcc.bce_storage", "BCE storage: %1$s / %2$s");
         add("chat.rcc.bce_network.status",
-                "BCE pipes: %1$s source(s), %2$s sink(s), moved %3$s last transfer, %4$s leg(s) refused");
+                "BCE pipes: %1$s source(s), %2$s sink(s), moved %3$s last transfer, %4$s leg(s) refused, "
+                        + "%5$s generator(s) arrayed at %6$s/sec");
         add("chat.rcc.bce_pipe.mode", "BCE Pipe %1$s: %2$s end set to %3$s");
         add("chat.rcc.bce_pipe.no_link", "BCE Pipe has nothing attached on its %s end - connect something first");
         add("chat.rcc.port.cycled", "Compression Port set to %s");

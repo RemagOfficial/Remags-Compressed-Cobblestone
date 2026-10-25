@@ -3,8 +3,8 @@ package com.remag.rcc.registry;
 import java.math.BigInteger;
 
 /**
- * The single knob for the whole mod: how the compression tiers are bounded, the darkness curve that maps a
- * tier to a tint brightness, and the shared math for the big-tier machine's base-cobblestone-equivalent mass.
+ * The single knob for the whole mod: how the compression tiers are bounded, the band-indexed tint ramp that maps a
+ * tier to a colour, and the shared math for the big-tier machine's base-cobblestone-equivalent mass.
  *
  * <p>Tiers are {@link BigInteger} and represent an <em>emergent</em> amount of cobblestone: a tier-{@code t}
  * block is equivalent to {@code 9^(t-1)} base cobblestone, but we never materialise that count. Anything that
@@ -13,16 +13,82 @@ import java.math.BigInteger;
  */
 public final class CompressionConfig {
     // --- Tier bounds ---------------------------------------------------------------------------
+    // These are <em>aliases onto the band table</em> ({@link CompressionBand}), not the other way round: one row per
+    // band is the single source of truth, and the shipped names stay so the machines read the same numbers they always
+    // did. Band 0 tops out at {@code 10^3 = 1000} and band 1 at {@code 10^12}, exactly as before.
     /** Highest tier the vanilla 3x3 compress chain can produce; also the creative-tab listing ceiling. */
-    public static final BigInteger MANUAL_MAX_LEVEL = BigInteger.valueOf(1000);
+    public static final BigInteger MANUAL_MAX_LEVEL = CompressionBand.BAND_0.maxOutputTier();
     /** Lowest seed tier the Compression Manipulator will accept. */
-    public static final BigInteger MANIPULATOR_MIN_IN = BigInteger.valueOf(1000);
+    public static final BigInteger MANIPULATOR_MIN_IN = CompressionBand.BAND_1.minInputTier();
     /** Highest output tier this machine will produce (a future machine continues the ladder). */
-    public static final BigInteger MANIPULATOR_MAX_OUT = BigInteger.TEN.pow(12);
+    public static final BigInteger MANIPULATOR_MAX_OUT = CompressionBand.BAND_1.maxOutputTier();
 
     // --- Visual curve --------------------------------------------------------------------------
-    /** log10 ceiling the tint ramp is normalised against (tier 1 -> white, ~1e12 -> black). */
-    public static final int TINT_EXPONENT_CEILING = 12;
+    // The tint is the one place a tier becomes something you can <em>see</em>, so the ramp is indexed by band rather
+    // than normalised against a single ceiling. The old curve (MASTER_PLAN D21) was
+    // {@code brightness = 1 - log10(tier) / 12}: grayscale only, and it clamped to pure black at band 1's ceiling, so
+    // every band-2..8 block was indistinguishable from a band-1 one. It is replaced by one colour <em>segment per
+    // band</em> - band 0 darkens plain cobblestone to black, band 1 climbs back out of black to white, band 2 pushes
+    // white into red, and the rest walks the rainbow - so each machine tier visibly recolors the block, and the two
+    // grayscale segments still read exactly like the old ramp for the tiers that exist today.
+    /**
+     * The tint that reproduces the <em>original</em>, un-brightened cobblestone art on a tier-1 block: {@code 177/255}
+     * per channel, in {@code [0,1]}.
+     *
+     * <p>Needed because a tint is a <b>multiply</b> and can never make a pixel brighter than its texture already is.
+     * The compressed cobblestone sprite ({@code assets/rcc/textures/block/compressed_cobblestone.png}) is a deliberate
+     * brightened derivative of the mod's own cobblestone art - every channel scaled by {@code 255/177}, pushing its
+     * brightest pixel to full white so that a {@code (1,1,1)} tint actually reads as white instead of the muddy grey
+     * vanilla-derived art gives. A pure scale is exactly reversible, so multiplying back by {@code 177/255} - this
+     * constant - lands band 0's start on the original pixels, unchanged.
+     *
+     * <p><b>Repainting the sprite means updating this number</b>: it is the repainted texture's own
+     * {@code max_channel / 255} and nothing else. Keep the brightening a plain scale (no gamma, no lift) or band 0
+     * stops matching the art it is meant to reproduce.
+     */
+    public static final float TINT_BASE_GREY = 177f / 255f;
+    /**
+     * The ramp's <em>anchors</em>, one per entry of {@link #TINT_STOPS}, as {@code 0xFFRRGGBB}: index 0 is the
+     * plain-cobblestone colour of a tier-1 block, and index {@code k+1} is the colour a block reaches at the top of
+     * band {@code k}. Ordered by progression: cobblestone grey, black, white, then red, orange, yellow, green, cyan,
+     * blue, violet - one hue per band, the rainbow the plan asks for (D21 resolved).
+     */
+    public static final int[] TINT_ANCHOR_ARGB = {
+            argbGrey(TINT_BASE_GREY),
+            0xFF_000000, // top of band 0 (tier 1000): the whole manual climb darkens
+            0xFF_FFFFFF, // top of band 1: the multiblock band climbs back out of black to white
+            0xFF_FF0000, // band 2: white -> red
+            0xFF_FF8000, // band 3: red -> orange
+            0xFF_FFFF00, // band 4: orange -> yellow
+            0xFF_00FF00, // band 5: yellow -> green
+            0xFF_00FFFF, // band 6: green -> cyan
+            0xFF_0000FF, // band 7: cyan -> blue
+            0xFF_8000FF  // band 8: blue -> violet, the mod's stated googol-tier look
+    };
+    /**
+     * The {@code log10(tier)} at each {@link #TINT_ANCHOR_ARGB} anchor, derived from the band table so a new band row
+     * adds a ramp segment on its own: {@code 0} (tier 1), then every {@link CompressionBand#maxOutputTier()}.
+     * <p>Computed through {@link #log10(java.math.BigInteger)}, a method, so it is safe from a static initialiser -
+     * {@link CompressionBand}'s constructors never read back into this class (see its own javadoc on the order rule).
+     */
+    public static final double[] TINT_STOPS = buildTintStops();
+
+    /** {@link #TINT_STOPS} paired with {@link #TINT_ANCHOR_ARGB}: one entry per band ceiling, led by tier 1. */
+    private static double[] buildTintStops() {
+        CompressionBand[] bands = CompressionBand.values();
+        double[] stops = new double[bands.length + 1];
+        stops[0] = 0.0D; // log10(1): the tier-1 block, still looking like plain cobblestone
+        for (int i = 0; i < bands.length; i++) {
+            stops[i + 1] = log10(bands[i].maxOutputTier());
+        }
+        return stops;
+    }
+
+    /** A grayscale anchor from a single {@code [0,1]} channel value, in the {@link #TINT_ANCHOR_ARGB} format. */
+    private static int argbGrey(float channel) {
+        int v = Math.clamp(Math.round(255f * channel), 0, 255);
+        return (0xFF << 24) | (v << 16) | (v << 8) | v;
+    }
 
     /** log10(8): the extra base-cobblestone mass a single +1 tier step needs beyond the seed it upgrades. */
     public static final double LOG8 = Math.log10(8d);
@@ -31,24 +97,64 @@ public final class CompressionConfig {
     /** log10(9): the base-cobblestone multiplier each compression tier adds. */
     public static final double LOG9 = Math.log10(9d);
 
+    // The two headroom margins sit here, ahead of every band-derived ceiling below, because those fields call
+    // {@link #withTransferHeadroom} <em>from their own initialisers</em>: static fields run top to bottom, so a
+    // margin declared later would still be {@code 0.0} when an earlier ceiling asks for it and the headroom would
+    // silently vanish (a sink with a ceiling exactly equal to its biggest push can never express "one slice of room
+    // left", which is the failure this margin exists to prevent).
+    /**
+     * The smallest transfer a log10 buffer can physically express. Doubles carry ~15 significant digits, so at
+     * magnitude ~954 anything more than ~13 orders smaller than the pool no-ops on add/subtract - moving such a
+     * slice would silently create a hair of mass. <strong>No longer a transfer gate:</strong> {@code BceNetwork}
+     * runs every leg unconditionally and accepts that bounded, invisible sliver (the end goal is so many orders away
+     * that the duplication is nothing). This constant now only sizes a store's headroom above its nominal capacity
+     * (see {@link #AUTO_BCE_CAPACITY_LOG}), so a sink always has room to express the last slice of a transfer.
+     */
+    public static final double BCE_TRANSFER_FLOOR_LOG = 10.0D;
+    /**
+     * The <em>relative</em> margin a sink keeps above its own biggest push. Needed because a {@code double} log10
+     * value this large cannot carry an additive ten: at magnitude {@code 1e100} one ulp is about {@code 2e83}, so
+     * {@code 1e100 + 10 == 1e100} exactly and a fixed headroom silently rounds out of existence - {@link #log10subtract}
+     * then reports "no room" and the last slice of every fill is refused forever. Taking the <em>larger</em> of the
+     * additive and relative margins in {@link #withTransferHeadroom} keeps today's small-band behaviour byte-identical
+     * while staying expressible at the goal band.
+     */
+    public static final double SINK_HEADROOM_RELATIVE = 1.0E-3D;
+    /**
+     * The old hand-picked "effectively unlimited" sink ceiling, kept as a <em>floor</em>. {@link
+     * CompressionBand#sinkCeilingLog()} takes the larger of this figure and its own band's biggest push, so no
+     * shipped band's pool gets tighter than it is today (band 1's whole ceiling block is only {@code 9.5*10^11} log
+     * mass, far under this) while every band from 2 upward is governed by its own magnitude instead of a constant
+     * that would quietly start refusing legitimate feeds.
+     */
+    public static final double UNLIMITED_SINK_FLOOR_LOG = 1.0E18D;
+
     // --- Manipulator multiblock ---------------------------------------------------------------
-    public static final int REGION_RADIUS = 2; // 5x5x5 cube centred on the core
+    public static final int REGION_RADIUS = CompressionBand.BAND_1.compressorRadius(); // 5x5x5 cube centred on the core
     public static final int ENERGY_CAPACITY = 1_000_000;
     public static final int ENERGY_PER_CRAFT = 250_000;
     public static final int TICKS_PER_CRAFT = 240; // 120s per cycle (progress bar + drain rate derive from this)
-    public static final int MIN_POWER_PORTS = 1;
+    /**
+     * POWER ports the Manipulator's shell needs at minimum, from its band row. Band-scaled port counts are how a
+     * later band raises its FE budget without one enormous number (see {@link CompressionBand#minPowerPorts()} and
+     * MASTER_PLAN §4.15); bands 0-1 both ask for one.
+     */
+    public static final int MIN_POWER_PORTS = CompressionBand.BAND_1.minPowerPorts();
     public static final int MIN_ITEM_IN_PORTS = 1;
     public static final int MIN_ITEM_OUT_PORTS = 1;
     /** The structure needs exactly one Interface block (the only GUI entry point); more makes no sense. */
     public static final int MIN_INTERFACES = 1;
     public static final int MAX_INTERFACES = 1;
     /**
-     * Ceiling of the Manipulator's BCE-as-fuel intake (the ITEM_IN port's sink view), in log10 BCE. Set effectively
-     * unlimited ({@code 1e18}) because the pool is a logarithm and this machine runs at the giant tiers
-     * ({@link #MANIPULATOR_MIN_IN} .. {@link #MANIPULATOR_MAX_OUT}) whose fuel needs already reach ~1e12 log10 mass -
-     * anything smaller would reject legitimate feeds. Mirrors {@link #DECOMP_BCE_CAPACITY_LOG} on the output side.
+     * Ceiling of the Manipulator's BCE-as-fuel intake (the ITEM_IN port's sink view), in log10 BCE - derived from its
+     * band instead of being a hand-picked literal. {@link CompressionBand#sinkCeilingLog()} grows this with the band,
+     * floored at {@link #UNLIMITED_SINK_FLOOR_LOG}, which lands on exactly the old "effectively unlimited"
+     * {@code 1e18} for the shipped band 1 (so today's behaviour is untouched) and lets a band-2 pool scale to its own
+     * biggest push instead of a constant that would start <em>refusing legitimate feeds</em> - a tier-{@code 10^20}
+     * block is worth {@code 9.5*10^19} log10 mass, well past that old figure. See {@link #withTransferHeadroom} for
+     * the margin that keeps the last slice of a fill expressible.
      */
-    public static final double MANIPULATOR_BCE_CAPACITY_LOG = 1.0E18D;
+    public static final double MANIPULATOR_BCE_CAPACITY_LOG = CompressionBand.BAND_1.sinkCeilingLog();
 
     // --- Auto-Compressor (single-block tier 1..1000 automation; see machine.CompressionAutoBlockEntity) ---------
     /** The seed tier the Auto-Compressor climbs to; on reaching it the result is moved to the output slot. */
@@ -62,17 +168,13 @@ public final class CompressionConfig {
 
     // --- Auto Decompressor (single-block reverse of the ladder; see machine.CompressionAutoDecompressorBlockEntity) --
     /**
-     * Hard ceiling of the Auto Decompressor's BCE buffer, in log10 BCE. Deliberately enormous - far above any mass
-     * the game can actually produce (the multiblock tops out near tier 1e12, i.e. a ~1e12 log10 mass) - so the buffer
-     * is <em>effectively unlimited</em> and a descent can never stall for lack of room. Only a pipe that actually
-     * drains it can keep the pool low; until then the tank is a one-way vault. Safe because the value is already a
-     * logarithm, so {@code 1e18} costs a double nothing and {@link #log10add} cannot overflow on it.
-     *
-     * <p><b>Temporary:</b> this is only open-ended because nothing can drain the tank yet. Once BCE logistics exist
-     * (pipes moving it out, machines burning it as fuel) bring this back down to a real storage figure so the buffer
-     * is a meaningful constraint again.
+     * Hard ceiling of the Auto Decompressor's BCE buffer, in log10 BCE. Keyed to {@link CompressionBand#TOP}, not to
+     * its own band, because <em>every</em> decompressor is tier-agnostic: it will accept any block the mod can produce
+     * and walk it down (that is what lets the decompressor family end at band 3), and a descent from a googol-tier
+     * seed releases {@code ~9.5*10^99} log10 mass. A ceiling that any reachable input could exceed would stall a legal
+     * descent, so this stays effectively unlimited - it is the drain (pipes, tanks, fuel) that is the real constraint.
      */
-    public static final double DECOMP_BCE_CAPACITY_LOG = 1.0E18D;
+    public static final double DECOMP_BCE_CAPACITY_LOG = CompressionBand.TOP.sinkCeilingLog();
     /**
      * The quantum the GUI's BCE bar is measured against: one tier-{@link #AUTO_TARGET_LEVEL} block's worth of BCE
      * ({@code 9^1000}). Kept separate from {@link #DECOMP_BCE_CAPACITY_LOG} on purpose - a bar whose denominator were
@@ -88,7 +190,7 @@ public final class CompressionConfig {
      * shell shares the Manipulator's frame / glass / port / interface blocks but allows ports on the edge and corner
      * cells too, because the {@code 6} face-centre cells alone cannot fit one interface plus one of every port.
      */
-    public static final int DECOMP_REGION_RADIUS = 1;
+    public static final int DECOMP_REGION_RADIUS = CompressionBand.BAND_1.decompressorRadius();
     /**
      * Ticks one tier step of the Decompression Manipulator takes. At {@code 1} the multiblock releases one tier per
      * game tick - five times the single-block Auto Decompressor's pace ({@link #AUTO_TICKS_PER_STEP}), which is the
@@ -109,22 +211,22 @@ public final class CompressionConfig {
      * {@code 1000 << 9 = 512,000} FE/t. The escalating bill is what makes the ladder a power-infrastructure gate
      * the way the tier-0 buffer ceilings were a logistics gate.
      */
-    public static final int GEN1_BASE_ENERGY_PER_TICK = 1_000;
+    public static final int GEN1_BASE_ENERGY_PER_TICK = (int) CompressionBand.BAND_1.baseEnergyPerTick();
     /**
      * Half-width of the tier-1 generator's horizontal shell ({@code 3x3} columns) - same ring rule as the 3x3x3
      * decompressor - while the column runs four layers tall ({@link #GEN1_LAYERS_BELOW} under and
      * {@link #GEN1_LAYERS_ABOVE} over the core).
      */
-    public static final int GEN1_REGION_RADIUS = 1;
+    public static final int GEN1_REGION_RADIUS = CompressionBand.BAND_1.generatorHalfWidth();
     /** Layers under the core when it seals the <em>lower</em> interior slot of the four-tall column. */
-    public static final int GEN1_LAYERS_BELOW = 1;
+    public static final int GEN1_LAYERS_BELOW = CompressionBand.BAND_1.generatorLayersBelow();
     /**
      * Layers above the core when it seals the <em>lower</em> interior slot (mirrored when it seals the upper one).
      * The two interior slots are core + 1x1 air shaft; the scan tries both readings of the column.
      */
-    public static final int GEN1_LAYERS_ABOVE = 2;
+    public static final int GEN1_LAYERS_ABOVE = CompressionBand.BAND_1.generatorLayersAbove();
     /** The generator multiblock needs at least one POWER port... */
-    public static final int MIN_GEN1_POWER_PORTS = 1;
+    public static final int MIN_GEN1_POWER_PORTS = CompressionBand.BAND_1.minPowerPorts();
     /** ...and <em>exactly</em> one BCE-out (ITEM_OUT) port, so the mint rate never splits across two drains. */
     public static final int EXACT_GEN1_BCE_OUT_PORTS = 1;
 
@@ -140,18 +242,10 @@ public final class CompressionConfig {
      * a percentage, lets a huge source still feed a much smaller sink instead of the two orders of magnitude refusing
      * to meet. Values derive straight from the band constants so they stay tunable in one place.
      */
-    public static final double[] BCE_PIPE_MAX_TRANSFER_LOG = {bceMassLog(MANUAL_MAX_LEVEL), bceMassLog(MANIPULATOR_MAX_OUT)};
-    /**
-     * The smallest transfer a log10 buffer can physically express. Doubles carry ~15 significant digits, so at
-     * magnitude ~954 anything more than ~13 orders smaller than the pool no-ops on add/subtract - moving such a
-     * slice would silently create a hair of mass. <strong>No longer a transfer gate:</strong> {@code BceNetwork}
-     * runs every leg unconditionally and accepts that bounded, invisible sliver (the end goal is so many orders away
-     * that the duplication is nothing). This constant now only sizes a store's headroom above its nominal capacity
-     * (see {@link #AUTO_BCE_CAPACITY_LOG}), so a sink always has room to express the last slice of a transfer.
-     */
-    public static final double BCE_TRANSFER_FLOOR_LOG = 10.0D;
+    public static final double[] BCE_PIPE_MAX_TRANSFER_LOG =
+            {CompressionBand.BAND_0.pipeCeilingLog(), CompressionBand.BAND_1.pipeCeilingLog()};
     /** Capacity of the single-block BCE storage tank, in log10 BCE: one tier-{@code 1000} block's full yield. */
-    public static final double BCE_STORAGE_CAPACITY_LOG = bceMassLog(AUTO_TARGET_LEVEL);
+    public static final double BCE_STORAGE_CAPACITY_LOG = CompressionBand.BAND_0.storageCapacityLog();
     /**
      * Capacity of the <em>tier-two</em> tank, in log10 BCE: one tier-{@link #MANIPULATOR_MAX_OUT} block's full yield
      * - the biggest thing the multiblock band (Compression / Decompression Manipulator) can make or release. It is
@@ -159,7 +253,7 @@ public final class CompressionConfig {
      * tank, so the multiblock's mass has a vault that neither the tier-I pipe band nor the original tank (sized to
      * the tier-1000 Auto band) can strain.
      */
-    public static final double BCE_STORAGE_2_CAPACITY_LOG = bceMassLog(MANIPULATOR_MAX_OUT);
+    public static final double BCE_STORAGE_2_CAPACITY_LOG = CompressionBand.BAND_1.storageCapacityLog();
     /**
      * How many ticks a pipe network may reuse its cached store endpoints before rescanning. Placement and removal
      * invalidate eagerly via {@code neighborChanged}; this is the safety net for stores that appear/disappear
@@ -172,14 +266,28 @@ public final class CompressionConfig {
     // textures follow is the same one the old tint used: brightness 1.0 / 0.72 / 0.5 / 0.32 for tiers 1..4, over an
     // amber (0xFFB46A) extract hue and a blue (0x6AA8FF) insert hue.)
     /**
-     * Ceiling of the Auto-Compressor's BCE fuel pool, in log10 BCE: one full storage tank's yield plus ten orders of
-     * margin. The margin is not decoration - a sink whose ceiling equals its biggest possible input leaves nothing for
+     * Ceiling of the Auto-Compressor's BCE fuel pool, in log10 BCE: one full storage tank's yield plus the headroom
+     * margin above. The margin is not decoration - a sink whose ceiling equals its biggest possible input leaves nothing for
      * {@link #log10subtract} to express as "room", so the last slice of every transfer would be refused forever; ten
-     * decades is exactly {@link #BCE_TRANSFER_FLOOR_LOG}, the smallest difference this space can talk about. Item
+     * decades is exactly {@link #BCE_TRANSFER_FLOOR_LOG}, the smallest difference this space can talk about at this
+     * band. Item
      * fuel is still uncapped against this ({@code acceptFuel} just accumulates), so the number only gates what a bus
      * is allowed to push in.
      */
-    public static final double AUTO_BCE_CAPACITY_LOG = BCE_STORAGE_CAPACITY_LOG + BCE_TRANSFER_FLOOR_LOG;
+    public static final double AUTO_BCE_CAPACITY_LOG = withTransferHeadroom(BCE_STORAGE_CAPACITY_LOG);
+
+    /**
+     * A sink ceiling that stays representable at any magnitude: the larger of {@code value + ten decades} (the shipped
+     * convention, and what governs at the small bands) and {@code value * 1.001} (the only margin a {@code double}
+     * can still express once the value runs to four- and five-digit exponents). See {@link #SINK_HEADROOM_RELATIVE}.
+     * Both margins are compile-time constants, so this is safe to call from another static initialiser.
+     */
+    public static double withTransferHeadroom(double value) {
+        if (value == Double.NEGATIVE_INFINITY) {
+            return Double.NEGATIVE_INFINITY;
+        }
+        return Math.max(value + BCE_TRANSFER_FLOOR_LOG, value * (1.0D + SINK_HEADROOM_RELATIVE));
+    }
 
     // --- Cobblestone generators (the progression gate; see machine.CobblestoneGeneratorBlockEntity) ------------
     /**
@@ -222,12 +330,22 @@ public final class CompressionConfig {
         return tierExponent < 0 ? Math.log10(GEN_BASE_COBBLES_PER_SEC) : bceMassLog(BigInteger.valueOf(tierExponent));
     }
     /**
-     * Buffer ceiling of a BCE generator, in log10 BCE: half a second's worth of its own steady-state production
-     * ({@code rateLog - log10(2)}). A full buffer stalls the generator until a pipe drains it, which is what makes each
-     * generator a gate - you must build the next-tier drain infrastructure (and the next generator) to keep mass moving.
+     * Ticks between <em>minting</em> actions of a generator array - one per second. The generator used to add
+     * {@code rateLog - log10(20)} to its buffer every tick, which is a quantity that stops existing at the magnitudes
+     * the later bands run at: the ulp of a band-2 rate figure is already {@code 8192}, so subtracting {@code 1.301}
+     * from it returns the same {@code double} and a tower silently deposited its whole <em>per-second</em> rate
+     * <em>every tick</em> (20x its advertised output), while {@link #log10add} could never grow the buffer further.
+     * Minting one whole lump once per period makes the delivered amount exactly the advertised amount at every band,
+     * and needs no accumulation to be correct.
      */
-    public static double generatorBufferCeilingLog(int tierExponent) {
-        return generatorRateLog10PerSec(tierExponent) - Math.log10(2.0D);
+    public static final int GEN_MINT_PERIOD_TICKS = 20;
+    /**
+     * Buffer ceiling of a generator array, in log10 BCE, given the lump size it mints: the lump itself plus the
+     * headroom {@link #withTransferHeadroom} keeps expressible. Replaces the old {@code rateLog - log10(2)} ceiling,
+     * which was sized for per-tick slices and would now refuse the very lump the array exists to produce.
+     */
+    public static double generatorLumpCeilingLog(double lumpLog) {
+        return withTransferHeadroom(lumpLog);
     }
 
     // --- Seed cube render (the spinning cube drawn at the core; see client.CompressionCoreRenderer) ---------
@@ -298,23 +416,37 @@ public final class CompressionConfig {
     }
 
     /**
-     * Brightness multiplier for a tier, in {@code [0, 1]}: a log ramp so tier 1 is only slightly darker than
-     * vanilla and the {@link #TINT_EXPONENT_CEILING} tier reaches {@code 0f} (fully dark).
+     * The {@link #TINT_ANCHOR_ARGB} segment a tier's {@code log10} falls in: the index whose stop is the last one at
+     * or below it, clamped so anything past the final band ceiling keeps the last segment's end colour.
      */
-    public static float brightness(BigInteger level) {
-        double exponent = log10(level.max(BigInteger.ONE));
-        float b = (float) (1.0 - exponent / TINT_EXPONENT_CEILING);
-        return Math.clamp(b, 0f, 1f);
+    private static int tintSegment(double exponent) {
+        int last = Math.min(TINT_STOPS.length, TINT_ANCHOR_ARGB.length) - 2;
+        for (int i = last; i >= 1; i--) {
+            if (exponent > TINT_STOPS[i]) {
+                return i;
+            }
+        }
+        return 0;
     }
 
     /**
-     * ARGB tint colour for a tier: a pure grayscale multiply so the base texture only darkens (never shifts
-     * hue).
+     * ARGB tint colour for a tier, from the band-indexed ramp in {@link #TINT_ANCHOR_ARGB}: linear interpolation
+     * inside whichever segment {@link #TINT_STOPS} places the tier in. The first two segments are grayscale (so the
+     * shipped bands behave like the old curve, just stretched over their own band), and every segment after that
+     * pushes a hue - which is only visible because the base sprite is a brightened derivative (see
+     * {@link #TINT_BASE_GREY}).
      */
     public static int tintArgb(BigInteger level) {
-        int channel = Math.round(255f * brightness(level));
-        channel = Math.clamp(channel, 0, 255);
-        return (0xFF << 24) | (channel << 16) | (channel << 8) | channel;
+        double exponent = log10(level.max(BigInteger.ONE));
+        int segment = tintSegment(exponent);
+        double span = TINT_STOPS[segment + 1] - TINT_STOPS[segment];
+        float t = span <= 0.0D ? 1.0F : (float) Math.clamp((exponent - TINT_STOPS[segment]) / span, 0.0D, 1.0D);
+        int from = TINT_ANCHOR_ARGB[segment];
+        int to = TINT_ANCHOR_ARGB[segment + 1];
+        int r = Math.round(((from >> 16) & 0xFF) + t * (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)));
+        int g = Math.round(((from >> 8) & 0xFF) + t * (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)));
+        int b = Math.round((from & 0xFF) + t * ((to & 0xFF) - (from & 0xFF)));
+        return (0xFF << 24) | (r << 16) | (g << 8) | b;
     }
 
     /** log10 of the base-cobblestone-equivalent mass of a tier-{@code t} stack: {@code (t-1) * log10(9)}. */
@@ -367,7 +499,18 @@ public final class CompressionConfig {
         return pool + Math.log10(1.0 - Math.pow(10.0, sub - pool));
     }
 
-    /** Accumulate two mass logs: {@code log10(10^x + 10^y)}, stable against overflow and large gaps. */
+    /**
+     * Accumulate two mass logs: {@code log10(10^x + 10^y)}, stable against overflow and large gaps.
+     *
+     * <p><b>What this cannot do.</b> The result is always within {@code log10(2) = 0.301} of the larger argument, and
+     * a {@code double} only resolves changes of about {@code 2.2e-16} <em>relative</em> to its magnitude - so the
+     * addition lands while the pool is small and stops landing entirely once the pool's own magnitude grows past
+     * roughly {@code 1.4e15} (band 2's rate figure has an ulp of {@code 8192}; band 8's is {@code 9.7e83}). Repeatedly
+     * adding a slice is therefore a way to fill a small buffer, <b>not</b> a way to bank output: at the later bands N
+     * seconds of minting and 1 second of minting are the same {@code double}. Anything that has to scale with towers
+     * or with time does it in exponent space instead - see {@link CompressionBand#shareOf(BigInteger)} and
+     * {@link com.remag.rcc.energy.BceNetwork}.
+     */
     public static double log10add(double x, double y) {
         if (x == Double.NEGATIVE_INFINITY) {
             return y;

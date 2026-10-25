@@ -25,9 +25,11 @@ import net.neoforged.neoforge.client.model.generators.MultiPartBlockStateBuilder
 import net.neoforged.neoforge.common.data.ExistingFileHelper;
 
 public class ModBlockStateProvider extends BlockStateProvider {
-    // The one texture every level shares; the per-level darkness is applied at runtime by a block/item
-    // colour handler reading the compression level, so a single model covers all levels.
-    private static final ResourceLocation VANILLA_COBBLESTONE = ResourceLocation.withDefaultNamespace("block/cobblestone");
+    // The one texture every level shares; the per-level colour is applied at runtime by a block/item colour handler
+    // reading the compression level, so a single model covers all levels. It is the mod's own brightened cobblestone
+    // sprite - deliberately <em>not</em> vanilla's - because a tint can only ever multiply a texture darker, and the
+    // band ramp needs real headroom to reach white and the saturated hues (see CompressionConfig#TINT_BASE_GREY).
+    private static final String COBBLE_TEX = "block/compressed_cobblestone";
     // Root vanilla block model: carries the standard display transforms (isometric GUI,
     // hand/ground scaling). Without it a raw cube model renders oversized in hand and
     // flat/unrotated in inventory slots, since it would bake with no item transforms.
@@ -89,10 +91,11 @@ public class ModBlockStateProvider extends BlockStateProvider {
         // (see ClientEvents) multiply every quad by tintArgb(level). Without a tint index the quads
         // default to NO_TINT (-1) and the handler's colour is ignored on the block/item (only particles
         // tint, since they query the block colour unconditionally).
+        ResourceLocation cobble = modLoc(COBBLE_TEX);
         BlockModelBuilder model = models().getBuilder("compressed_cobblestone")
                 .parent(models().getExistingFile(VANILLA_BLOCK_PARENT))
-                .texture("cobble", VANILLA_COBBLESTONE)
-                .texture("particle", VANILLA_COBBLESTONE)
+                .texture("cobble", cobble)
+                .texture("particle", cobble)
                 .element()
                     .from(0f, 0f, 0f)
                     .to(16f, 16f, 16f)

@@ -38,9 +38,16 @@ import java.util.Objects;
  * this block entity runs the only server ticker.
  *
  * <p>A cycle turns a seed tier {@code n} into {@code 2n} when the structure is {@code formed}, the seed is at
- * least {@link CompressionConfig#MANIPULATOR_MIN_IN}, doubling stays within
+ * least {@link CompressionConfig#MANIPULATOR_MIN_IN}, the step stays within
  * {@link CompressionConfig#MANIPULATOR_MAX_OUT}, enough fuel mass has been fed, and enough FE is stored. On
  * start the seed and the whole fuel pool are consumed and FE drains across the craft.
+ *
+ * <p>The band ceiling is a <em>hard</em> cap the ladder must still be able to reach. Because
+ * {@link CompressionConfig#MANIPULATOR_MAX_OUT} ({@code 10^12}) is not a power-of-two multiple of the smallest seed
+ * ({@code 1000}), plain doubling tops out at {@code 1000 * 2^29 = 5.37e11} and could never land on it, so the
+ * <em>final</em> craft compresses by <em>less</em> than double and clamps exactly onto the ceiling (see {@link
+ * #nextOutputTier}). Its fuel and FE bills are <b>not</b> reduced for that shorter step - over-asking is harmless
+ * where precision-loss duplication already makes mass abundant.
  */
 public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvider, ICompressionMachine, IMultiblockController {
     private static final String TAG_SEED = "seed";
@@ -207,7 +214,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
     public void onLoad() {
         super.onLoad();
         if (this.level != null) {
-            IMultiblockPortHost.invalidatePortCaps(this.level, this.worldPosition);
+            IMultiblockPortHost.invalidatePortCaps(this.level, this.worldPosition, this.portShellExtent());
         }
     }
 
@@ -346,9 +353,9 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         if (n == null || n.compareTo(CompressionConfig.MANIPULATOR_MIN_IN) < 0) {
             return false;
         }
-        BigInteger out = n.shiftLeft(1);
-        if (out.compareTo(CompressionConfig.MANIPULATOR_MAX_OUT) > 0) {
-            return false;
+        BigInteger out = nextOutputTier(n);
+        if (out == null) {
+            return false; // seed already at the band's hard cap: nothing above it to climb to
         }
         // The output slot now accumulates a stack of results, so a craft may start whenever the finished item would
         // still fit: a same-tier stack merges toward its max size, and only a genuinely full (or foreign-tier) slot
@@ -368,7 +375,11 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         if (n == null) {
             return;
         }
-        this.pendingResult = n.shiftLeft(1);
+        BigInteger out = nextOutputTier(n);
+        if (out == null) {
+            return; // already at the hard cap; canStart should have refused, but never seed a null result
+        }
+        this.pendingResult = out;
         // Freeze the render tier NOW, from the seed we are about to consume. This is what guarantees the client
         // BER has a tier to draw even when the machine never idles (a freshly-loaded, instantly-ready manipulator
         // starts crafting on its first tick, so syncRenderSeedTier's idle branch would never run otherwise).
@@ -434,6 +445,25 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         ItemStack stack = new ItemStack(ModItems.COMPRESSED_COBBLESTONE.get());
         stack.set(ModDataComponents.COMPRESSION_LEVEL.get(), tier);
         return stack;
+    }
+
+    /**
+     * The tier a cycle seeded at {@code n} produces: the ordinary doubling {@code 2n}, <b>except</b> on the rung whose
+     * double would overshoot the band ceiling. {@link CompressionConfig#MANIPULATOR_MAX_OUT} ({@code 10^12}) is not a
+     * clean power-of-two multiple of {@link CompressionConfig#MANIPULATOR_MIN_IN} ({@code 1000}), so doubling alone
+     * would stop at {@code 1000 * 2^29 = 5.37e11} and the ceiling could never be minted; the final craft therefore
+     * compresses by <em>less</em> than double and clamps exactly onto the cap. Returns {@code null} when {@code n} has
+     * already reached (or passed) the cap, so there is nothing above it to climb to. Deliberately <b>not</b> used to
+     * cheapen the final craft's fuel/FE cost - both cycle gates still price off the seed {@code n} as any other rung.
+     */
+    @Nullable
+    private static BigInteger nextOutputTier(BigInteger n) {
+        BigInteger cap = CompressionConfig.MANIPULATOR_MAX_OUT;
+        if (n.compareTo(cap) >= 0) {
+            return null;
+        }
+        BigInteger doubled = n.shiftLeft(1);
+        return doubled.compareTo(cap) > 0 ? cap : doubled;
     }
 
     // --- Structure validation ------------------------------------------------------------------
@@ -513,21 +543,24 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
     }
 
     /**
-     * Locate the core this shell cell belongs to, scanning the {@code regionRadius} cube around {@code from}.
-     * Shared by {@link CompressionInterfaceBlock} (which has no block entity of its own) to reach the controller.
+     * Locate the core this shell cell belongs to, walking {@link IMultiblockPortHost#CORE_SCAN_OFFSETS} outward from
+     * {@code from} nearest-first. The ordered walk is what lets a band-2 shell find a core three or more blocks away
+     * without a fixed radius per band; the nearest-match order also means a cell wedged between two illegal towers
+     * joins the closer one instead of an arbitrary one. This helper is <em>compressor-specific</em> - it only ever
+     * finds {@code rcc:compression_core}. The {@link CompressionInterfaceBlock} does not use it: one panel serves all
+     * three machines, so it resolves a host of any kind through {@link IMultiblockPortHost#findPortHost} and dispatches
+     * on the type.
      */
     @Nullable
     public static CompressionCoreBlockEntity findCore(Level level, BlockPos from) {
-        int r = CompressionConfig.REGION_RADIUS;
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    BlockPos p = from.offset(dx, dy, dz);
-                    if (level.getBlockState(p).is(ModBlocks.CORE.get())
-                            && level.getBlockEntity(p) instanceof CompressionCoreBlockEntity core) {
-                        return core;
-                    }
-                }
+        for (BlockPos off : IMultiblockPortHost.CORE_SCAN_OFFSETS) {
+            BlockPos p = off.offset(from);
+            if (!level.isLoaded(p)) {
+                continue;
+            }
+            if (level.getBlockState(p).is(ModBlocks.CORE.get())
+                    && level.getBlockEntity(p) instanceof CompressionCoreBlockEntity core) {
+                return core;
             }
         }
         return null;

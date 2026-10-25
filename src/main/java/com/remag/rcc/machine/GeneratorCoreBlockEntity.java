@@ -2,8 +2,11 @@ package com.remag.rcc.machine;
 
 import com.remag.rcc.block.ModBlocks;
 import com.remag.rcc.block.entity.ModBlockEntities;
+import com.remag.rcc.energy.BceNetwork;
 import com.remag.rcc.energy.IBceStorage;
+import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.CompressionConfig;
+import com.remag.rcc.registry.DisplayNames;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentMap;
@@ -17,6 +20,12 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
  * Controller of the tier-1 <b>Generation Manipulator</b>: the 3x3x4 multiblock counterpart of the single-block
  * {@link CobblestoneGeneratorBlockEntity}. It seals one of the two interior slots of a four-tall tower (the other is
@@ -28,13 +37,19 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p>Unlike the free tier-0 drip this fountain <em>costs</em> power: it burns
  * {@link GeneratorCoreTier#energyPerTick()} FE/t while minting - doubling with every rung - and stalls with empty
- * buffers when the supply cannot pay, making power infrastructure the progression gate. Minted mass lands in a
- * log10 pool capped at half a second's own output (the tier-0 stall convention: a full buffer blocks production
- * until it is drained), and the machine refuses to run unless the structure carries at least one POWER port and
- * <em>exactly one</em> BCE-out (ITEM_OUT) port - the single drain keeps the mint rate whole instead of splitting it
- * across two pipes.
+ * buffers when the supply cannot pay, making power infrastructure the progression gate. It is also one
+ * <em>member</em> of a {@code MASTER_PLAN.md} D23 generator array: what it deposits alone is only its rung's
+ * {@link GeneratorCoreTier#shareExponent() share} (the rung exponent divided by {@code 2^band}), and
+ * {@link CompressionBand#arrayFullOutputTowers() 2^(band+1)} top-rung towers joined on one BCE bus mint a whole
+ * band-max block per second. The mint is therefore <b>one lump per second</b> ({@link
+ * CompressionConfig#GEN_MINT_PERIOD_TICKS} ticks), not twenty per-tick slices: a slice is below the {@code double}'s
+ * resolution at these magnitudes and would silently round to nothing. Only the bus's elected {@link
+ * BceNetwork#isGeneratorLead lead} tower deposits the {@code 9^arraySum} lump, and only into an <em>empty</em> pool -
+ * the tier-0 stall convention, now lump-shaped - while every formed, powered tower drains its own FE/t as upkeep
+ * whether or not it leads. A tower whose BCE-out port touches no extract pipe falls back to minting its own solo
+ * share, so a lone tower's readout is never zero.
  *
- * <p>It answers {@link IMultiblockPortHost} only: no GUI, no menu, no compression semantics - the interface panel
+ * <p>It answers {@link IMultiblockPortHost} and {@link IGeneratorArrayMember} only: no GUI, no menu, no compression semantics - the interface panel
  * never resolves it as a {@link IMultiblockController}. Instead the structure <em>requires</em> exactly one
  * {@link CompressionInterfaceBlock} on a face centre as its status panel: right-clicking it prints the live rate,
  * FE and buffer readout (see {@link CompressionInterfaceBlock#useWithoutItem}), the only window into a tower whose
@@ -42,12 +57,13 @@ import org.jetbrains.annotations.Nullable;
  * BCE source (mirroring the broken side of {@link CompressionAutoBlockEntity}'s fuel pool); ITEM_IN ports are not
  * part of this structure at all. All logic is server-authoritative.
  */
-public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblockPortHost {
+public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblockPortHost, IGeneratorArrayMember {
     private static final String TAG_ENERGY = "energy";
     private static final String TAG_POOL = "bcePool";
     private static final String TAG_FORMED = "formed";
+    private static final String TAG_MINT_COUNTDOWN = "mintCountdown";
 
-    private static final int RESCAN_INTERVAL = 20;
+    private static final int RESCAN_INTERVAL = CompressionConfig.GEN_MINT_PERIOD_TICKS;
 
     /** FE buffer as a plain count; the exposed view is receive-only (a 0-maxExtract view would also block our drain). */
     private int energy = 0;
@@ -55,8 +71,25 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
     private double bcePool = Double.NEGATIVE_INFINITY;
     /** Whether a valid 3x3x4 structure currently surrounds this core; drives the mint gate. */
     private boolean formed = false;
+    /** Ticks until the next lump attempt; resets to {@link CompressionConfig#GEN_MINT_PERIOD_TICKS} after each. */
+    private int mintCountdown = CompressionConfig.GEN_MINT_PERIOD_TICKS;
 
     private int rescanCooldown = 0;
+    /** The single BCE-out (ITEM_OUT) port's position, found by the structure scan; {@code null} when not formed. */
+    @Nullable
+    private BlockPos bceOutPos = null;
+    /** The bus this tower's BCE-out port drains into, re-found on each rescan; {@code null} when solo (no pipe). */
+    @Nullable
+    private BceNetwork bus = null;
+    /**
+     * Every POWER-port cell this tower claims inside its own shell, republished on each successful {@link
+     * #matchesStructure} and cleared when the tower breaks. A port standing on a wall shared with a same-band
+     * neighbour lands in <em>both</em> cores' lists, which is what lets {@link CompressionPortBlockEntity} split that
+     * port's incoming FE across every co-owner (see {@link #claimsPowerPort(BlockPos)}).
+     */
+    private List<BlockPos> powerPorts = List.of();
+    /** The POWER ports found by the currently-running {@link #matchesStructure} pass; published to {@link #powerPorts} on a match. */
+    private final List<BlockPos> matchedPowerPorts = new ArrayList<>();
 
     private final IEnergyStorage energyView = new IEnergyStorage() {
         @Override
@@ -103,7 +136,8 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
 
         @Override
         public double getMaxBceLog() {
-            return rung().bufferCeilingLog();
+            // A whole lump's ceiling: the buffer holds exactly one band/array lump, never a partial slice.
+            return CompressionConfig.generatorLumpCeilingLog(lumpRateLog());
         }
 
         @Override
@@ -150,7 +184,7 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
     public void onLoad() {
         super.onLoad();
         if (this.level != null) {
-            IMultiblockPortHost.invalidatePortCaps(this.level, this.worldPosition);
+            IMultiblockPortHost.invalidatePortCaps(this.level, this.worldPosition, this.portShellExtent());
         }
     }
 
@@ -193,57 +227,142 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
         this.energy = Math.max(0, this.energy - Math.max(0, amount));
     }
 
+    // --- IGeneratorArrayMember (D23) -----------------------------------------------------------
+
+    /**
+     * This tower's share of its bus while it is actually producing: its rung's {@link
+     * GeneratorCoreTier#shareExponent() share exponent}, or {@code null} when the shell is incomplete or the FE
+     * buffer cannot pay a tick's upkeep, so a starved or broken tower drops out of the array total rather than
+     * inflating it (see {@link com.remag.rcc.energy.BceNetwork}).
+     */
+    @Override
+    @Nullable
+    public BigInteger arrayShareExponent() {
+        if (!this.formed || this.energy < rung().energyPerTick()) {
+            return null;
+        }
+        return rung().shareExponent();
+    }
+
+    @Override
+    public CompressionBand arrayBand() {
+        return rung().band();
+    }
+
+    /**
+     * The log10 BCE/sec figure of the lump this tower would deposit: the whole bus's aggregate when it is on one and
+     * producing, else its own solo share. Used both to size the mint and to report the buffer ceiling.
+     */
+    private double lumpRateLog() {
+        BceNetwork bus = this.bus;
+        if (bus != null) {
+            double aggregate = bus.arrayRateLog10PerSec();
+            if (aggregate != Double.NEGATIVE_INFINITY) {
+                return aggregate;
+            }
+        }
+        return rung().rateLog10PerSec();
+    }
+
     // --- Cycle logic ---------------------------------------------------------------------------
 
     public static void serverTick(Level level, BlockPos pos, BlockState state, GeneratorCoreBlockEntity be) {
         if (--be.rescanCooldown <= 0) {
             be.rescanCooldown = RESCAN_INTERVAL;
             be.scanRegion();
+            be.bus = be.bceOutPos == null ? null : BceNetwork.forGenerator(level, be.bceOutPos);
         }
         if (!be.formed) {
             return;
         }
         GeneratorCoreTier rung = be.rung();
         int cost = rung.energyPerTick();
+        // Upkeep: every formed member pays its own FE/t every tick, whether or not it is the array's lead.
         if (be.energy < cost) {
             return; // power starved: the fountain only flows while the grid pays for it
         }
-        double ceiling = rung.bufferCeilingLog();
-        double free = CompressionConfig.log10subtract(ceiling, be.bcePool);
-        if (free == Double.NEGATIVE_INFINITY) {
-            return; // buffer full - the single BCE-out pipe must drain it before more is minted
-        }
         be.drainEnergy(cost);
-        double accepted = Math.min(rung.rateLog10PerTick(), free);
-        be.bcePool = Math.min(CompressionConfig.log10add(be.bcePool, accepted), ceiling);
-        be.setChanged();
-    }
-
-    /** Chat readout for the interface panel (and a sneak-click on the sealed core): rate, pay, buffer, and which gate is holding the fountain. */
-    public String contentsSummary() {
-        GeneratorCoreTier rung = rung();
-        return rung.describe() + " for " + String.format(java.util.Locale.US, "%,d", rung.energyPerTick())
-                + " FE/t, buffer " + DisplayAmount.of(bcePool) + " / " + DisplayAmount.of(rung.bufferCeilingLog())
-                + ", FE " + energy + " / " + rung.energyCapacity() + "; " + gateSummary(rung);
+        if (--be.mintCountdown > 0) {
+            return;
+        }
+        be.mintCountdown = CompressionConfig.GEN_MINT_PERIOD_TICKS;
+        be.mintLump();
     }
 
     /**
-     * Name the single reason the fountain is not minting right now, so a stalled tower reads as a diagnosis instead
-     * of a mystery. Precedence mirrors {@link #serverTick}: a broken shell explains everything, then a power buffer
-     * below one tick's bill, then a full BCE buffer waiting on its drain. With all three gates green the mint runs
-     * every tick - at the top rung that bill is {@code 512,000} FE/t sustained, which ordinary cables cannot feed.
+     * Deposit one {@code 9^arraySum} lump, once per second. Only the bus's elected lead mints, and only into an empty
+     * pool (the stall convention: an undrained lump means this second's output is refused, not banked). A solo tower
+     * (no extract pipe on its BCE-out port) is its own lead and mints its own share.
+     */
+    private void mintLump() {
+        BceNetwork bus = this.bus;
+        boolean lead = bus == null || bus.isGeneratorLead(this.worldPosition);
+        if (!lead || this.bcePool != Double.NEGATIVE_INFINITY) {
+            return; // upkeep only, or last second's lump has not drained yet
+        }
+        double lumpLog = lumpRateLog();
+        if (lumpLog == Double.NEGATIVE_INFINITY) {
+            return;
+        }
+        // The lump fits its own ceiling by construction (generatorLumpCeilingLog adds headroom above it), so the
+        // deposit is unconditional once the pool is empty and this tower leads.
+        this.bcePool = lumpLog;
+        this.setChanged();
+    }
+
+    /** Chat readout for the interface panel (and a sneak-click on the sealed core): share, array, bus total, lead, FE, buffer, gate. */
+    public String contentsSummary() {
+        GeneratorCoreTier rung = rung();
+        BceNetwork bus = this.bus;
+        int members = bus == null ? 1 : bus.arraySize();
+        long wanted = bus == null ? 0L : bus.arrayFullOutputTowers();
+        double total = lumpRateLog();
+        String arrayText = bus == null
+                ? "solo (no BCE bus on the output port)"
+                : "array " + members + (wanted > 0L ? " / " + wanted + " towers" : " towers");
+        return rung.describe() + " share, " + arrayText + "; bus total "
+                + DisplayNames.bceMagnitude(total) + "/sec, " + leadWord(bus)
+                + ", FE " + this.energy + " / " + rung.energyCapacity()
+                + ", buffer " + DisplayNames.bceMagnitude(this.bcePool) + " / "
+                + DisplayNames.bceMagnitude(bceView.getMaxBceLog()) + "; " + gateSummary(rung);
+    }
+
+    /** Name this tower's role in its array: the lead that mints, a upkeep-only member, or a lone producer. */
+    private String leadWord(@Nullable BceNetwork bus) {
+        if (bus == null) {
+            return "minting solo";
+        }
+        return bus.isGeneratorLead(this.worldPosition) ? "lead (mints the lump)" : "upkeep only";
+    }
+
+    /**
+     * Name the single reason this tower is not depositing a lump right now, so a stalled array reads as a diagnosis
+     * instead of a mystery. Precedence mirrors {@link #serverTick}: a broken shell explains everything, then a power
+     * buffer below one tick's upkeep, then an undrained lump waiting on its pipe, then the array role - a member that
+     * is not the lead never deposits, and an array that has passed its band's ceiling reports the clamp.
      */
     private String gateSummary(GeneratorCoreTier rung) {
         if (!formed) {
             return "structure incomplete (needs 3x3x4 shell with a 1x1 air shaft directly above or below the "
-                    + "core, 1+ POWER port, exactly 1 BCE-out port and 1 interface)";
+                    + "core, 1+ POWER port, exactly 1 BCE-out port and 1 interface; towers may share a wall, and on a "
+                    + "shared wall only frame/glass/POWER ports are allowed - a shared POWER port splits its input "
+                    + "FE across every tower on that wall, while the BCE-out port and interface must stay private)";
         }
         if (this.energy < rung.energyPerTick()) {
             return "starved - needs " + String.format(java.util.Locale.US, "%,d", rung.energyPerTick())
-                    + " FE in the buffer and that much per tick sustained while minting";
+                    + " FE in the buffer and that much per tick sustained upkeep";
         }
-        if (CompressionConfig.log10subtract(rung.bufferCeilingLog(), this.bcePool) == Double.NEGATIVE_INFINITY) {
-            return "buffer full - drain it through the BCE-out pipe";
+        if (this.bcePool != Double.NEGATIVE_INFINITY) {
+            return "lump waiting to drain - attach an extract BCE pipe to the output port";
+        }
+        BceNetwork bus = this.bus;
+        if (bus != null) {
+            if (bus.isArrayClamped()) {
+                return "array full - clamped at this band's ceiling";
+            }
+            if (!bus.isGeneratorLead(this.worldPosition)) {
+                return "not the lead - this tower is upkeep only";
+            }
         }
         return "minting - structure complete";
     }
@@ -278,21 +397,79 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
         int r = CompressionConfig.GEN1_REGION_RADIUS;
         int below = CompressionConfig.GEN1_LAYERS_BELOW;
         int above = CompressionConfig.GEN1_LAYERS_ABOVE;
+        // Snapshot the old claim set so we can tell the shell's POWER ports (and any cable wired to a shared wall)
+        // to re-resolve their owner count when this tower starts or stops co-owning one.
+        List<BlockPos> oldPorts = this.powerPorts;
+        this.bceOutPos = null;
+        this.powerPorts = List.of();
         // Two readings of the four-layer column: the core low with the shaft overhead, or the core high with the
-        // shaft under it. Whichever box matches first forms the machine.
+        // shaft under it. Whichever box matches first forms the machine; the match that wins leaves its BCE-out port
+        // position and POWER-port list in {@link #matchedBceOutPos}/{@link #matchedPowerPorts} for the tick and the
+        // port splitter to read from.
         this.formed = matchesStructure(-below, above, below, r)
                 || matchesStructure(-above, below, -below, r);
+        if (!this.formed) {
+            this.bceOutPos = null;
+            this.powerPorts = List.of();
+        }
+        invalidateChangedPowerPorts(oldPorts, this.powerPorts);
     }
+
+    /**
+     * Ask the level to drop any cached capability answer at every POWER-port cell whose ownership this scan changed,
+     * so a cable sitting on a wall shared with a neighbour re-queries and now sees the new co-owner (or loses one when
+     * a neighbour tower breaks). Skipped entirely when the claim set is unchanged, so the 20-tick rescan never churns
+     * the caches of a stable array. The shared port lives inside both towers' shells, so each core invalidating its own
+     * claimed ports covers the seam from both sides however the two towers finish assembling.
+     */
+    private void invalidateChangedPowerPorts(List<BlockPos> oldPorts, List<BlockPos> newPorts) {
+        if (oldPorts.equals(newPorts)) {
+            return;
+        }
+        Set<BlockPos> changed = new HashSet<>(oldPorts);
+        changed.addAll(newPorts);
+        for (BlockPos port : changed) {
+            level.invalidateCapabilities(port);
+        }
+    }
+
+    /**
+     * Whether this tower claims {@code cell} as one of its POWER ports while formed. Two same-band towers whose shells
+     * overlap on a shared wall both claim the port standing there, which is how {@link CompressionPortBlockEntity}
+     * discovers the co-owners to split a shared port's incoming FE between.
+     */
+    public boolean claimsPowerPort(BlockPos cell) {
+        return this.formed && this.powerPorts.contains(cell);
+    }
+
+    /** Read-only view of this tower's claimed POWER-port cells (empty when not formed). */
+    public List<BlockPos> claimedPowerPorts() {
+        return this.powerPorts;
+    }
+
+    /** The BCE-out port found by the last {@link #matchesStructure} call; becomes {@link #bceOutPos} only when it forms. */
+    @Nullable
+    private BlockPos matchedBceOutPos = null;
 
     /**
      * Check one box reading: the centre column spans {@code dyMin}..{@code dyMax} around the core and holds the
      * single air shaft cell at {@code shaftDy}. Returns true when every shell cell wears its role and the ports
      * and interface are exactly as the machine requires.
+     *
+     * <p>Wall sharing (see {@code MASTER_PLAN.md} D24): a shell cell that also lies inside an adjacent <em>same-band</em>
+     * tower's box is a <em>shared</em> cell. On such a cell frame, glass and a {@link PortType#POWER} port are all
+     * still valid, and the POWER port is recorded as co-owned so its incoming FE is later split between the towers;
+     * the {@link PortType#ITEM_OUT} drain and the status {@link ModBlocks#INTERFACE interface} are refused there, so
+     * every tower keeps one private drain and one private panel. The neighbour test reads the block at the shared
+     * wall's far side, so two cores 2r apart agree on the seam the moment both are placed (whether or not either has
+     * completed its own scan).
      */
     private boolean matchesStructure(int dyMin, int dyMax, int shaftDy, int r) {
         int power = 0;
         int bceOut = 0;
         int interfaces = 0;
+        this.matchedBceOutPos = null;
+        this.matchedPowerPorts.clear();
         for (int dx = -r; dx <= r; dx++) {
             for (int dy = dyMin; dy <= dyMax; dy++) {
                 for (int dz = -r; dz <= r; dz++) {
@@ -313,14 +490,25 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
                     int boundary = (Math.abs(dx) == r ? 1 : 0)
                             + (Math.abs(dz) == r ? 1 : 0)
                             + (dy == dyMin || dy == dyMax ? 1 : 0);
+                    boolean shared = isSharedCell(dx, dz, r);
                     if (boundary >= 2) {
                         // Edges and corners: frame, or a port standing in for it (never glass).
                         if (s.is(ModBlocks.FRAME.get())) {
                             // fine, a structural edge/corner
                         } else if (s.is(ModBlocks.PORT.get())) {
-                            switch (s.getValue(CompressionPortBlock.PORT_TYPE)) {
-                                case POWER -> power++;
-                                case ITEM_OUT -> bceOut++;
+                            PortType type = s.getValue(CompressionPortBlock.PORT_TYPE);
+                            if (shared && type != PortType.POWER) {
+                                return false; // only POWER ports may stand on a shared wall
+                            }
+                            switch (type) {
+                                case POWER -> {
+                                    power++;
+                                    this.matchedPowerPorts.add(p.immutable());
+                                }
+                                case ITEM_OUT -> {
+                                    bceOut++;
+                                    this.matchedBceOutPos = p.immutable();
+                                }
                                 case ITEM_IN -> {
                                     return false; // this machine takes no items
                                 }
@@ -333,11 +521,24 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
                         if (s.is(ModBlocks.GLASS.get())) {
                             // fine, a viewing face
                         } else if (s.is(ModBlocks.INTERFACE.get())) {
+                            if (shared) {
+                                return false; // every tower keeps its own private status panel
+                            }
                             interfaces++;
                         } else if (s.is(ModBlocks.PORT.get())) {
-                            switch (s.getValue(CompressionPortBlock.PORT_TYPE)) {
-                                case POWER -> power++;
-                                case ITEM_OUT -> bceOut++;
+                            PortType type = s.getValue(CompressionPortBlock.PORT_TYPE);
+                            if (shared && type != PortType.POWER) {
+                                return false; // only POWER ports may stand on a shared wall
+                            }
+                            switch (type) {
+                                case POWER -> {
+                                    power++;
+                                    this.matchedPowerPorts.add(p.immutable());
+                                }
+                                case ITEM_OUT -> {
+                                    bceOut++;
+                                    this.matchedBceOutPos = p.immutable();
+                                }
                                 case ITEM_IN -> {
                                     return false; // this machine takes no items
                                 }
@@ -351,10 +552,41 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
                 }
             }
         }
-        return power >= CompressionConfig.MIN_GEN1_POWER_PORTS
+        boolean ok = power >= CompressionConfig.MIN_GEN1_POWER_PORTS
                 && bceOut == CompressionConfig.EXACT_GEN1_BCE_OUT_PORTS
                 && interfaces >= CompressionConfig.MIN_INTERFACES
-                && interfaces <= CompressionConfig.MAX_INTERFACES;
+                && interfaces <= CompressionConfig.MAX_INTERFACES
+                && this.matchedBceOutPos != null;
+        if (ok) {
+            // Publish this reading's drains and co-owned POWER ports; cleared again by scanRegion when the tower breaks.
+            this.bceOutPos = this.matchedBceOutPos;
+            this.powerPorts = List.copyOf(this.matchedPowerPorts);
+        }
+        return ok;
+    }
+
+    /**
+     * Whether the shell cell at offset {@code (dx, dz)} sits on a wall shared with an adjacent same-band tower: it
+     * must be on this tower's extreme face along some horizontal axis <em>and</em> have a same-band generator core
+     * {@code 2r} out along that axis, whose box therefore covers the very same cell. Top and bottom faces ({@code dy}
+     * extremes) are never reported shared - towers do not stack - which is what guarantees each tower a private face
+     * for its BCE-out port and interface.
+     */
+    private boolean isSharedCell(int dx, int dz, int r) {
+        if (Math.abs(dx) == r && sameBandCoreAt(worldPosition.offset(Integer.signum(dx) * 2 * r, 0, 0))) {
+            return true;
+        }
+        return Math.abs(dz) == r && sameBandCoreAt(worldPosition.offset(0, 0, Integer.signum(dz) * 2 * r));
+    }
+
+    /** True when {@code p} holds a {@link ModBlocks#GENERATOR_CORE generator core} running on this tower's band. */
+    private boolean sameBandCoreAt(BlockPos p) {
+        if (!level.isLoaded(p)) {
+            return false;
+        }
+        BlockState s = level.getBlockState(p);
+        return s.is(ModBlocks.GENERATOR_CORE.get())
+                && s.getValue(GeneratorCoreBlock.RUNG).band() == this.rung().band();
     }
 
     // --- Persistence ---------------------------------------------------------------------------
@@ -376,6 +608,7 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
         tag.putInt(TAG_ENERGY, energy);
         tag.putDouble(TAG_POOL, bcePool);
         tag.putBoolean(TAG_FORMED, formed);
+        tag.putInt(TAG_MINT_COUNTDOWN, mintCountdown);
     }
 
     @Override
@@ -384,18 +617,9 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
         this.energy = tag.getInt(TAG_ENERGY);
         this.bcePool = tag.contains(TAG_POOL) ? tag.getDouble(TAG_POOL) : Double.NEGATIVE_INFINITY;
         this.formed = tag.getBoolean(TAG_FORMED);
-    }
-
-    /** Compact {@code 10^N} form of a log10 mass for the chat readout (mirrors the single generator's helper). */
-    private static final class DisplayAmount {
-        static String of(double log) {
-            if (log == Double.NEGATIVE_INFINITY || Double.isNaN(log) || log <= 0.0) {
-                return "0";
-            }
-            if (Math.abs(log - Math.rint(log)) < 1e-3) {
-                return "10^" + (long) Math.rint(log);
-            }
-            return String.format(java.util.Locale.US, "10^%.1f", log);
-        }
+        // Absent on pre-array saves: start a full period out so an old tower just resumes minting.
+        this.mintCountdown = tag.contains(TAG_MINT_COUNTDOWN)
+                ? tag.getInt(TAG_MINT_COUNTDOWN)
+                : CompressionConfig.GEN_MINT_PERIOD_TICKS;
     }
 }

@@ -1,9 +1,13 @@
 package com.remag.rcc.machine;
 
+import com.remag.rcc.registry.BceNotation;
+import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.CompressionConfig;
 import com.remag.rcc.registry.DisplayNames;
 import net.minecraft.util.StringRepresentable;
 import org.jetbrains.annotations.Nullable;
+
+import java.math.BigInteger;
 
 /**
  * One rung of the cobblestone-generator ladder - the block-state value that decides a
@@ -21,6 +25,11 @@ import org.jetbrains.annotations.Nullable;
  * <p>The {@code TIER_*} rungs are the item-output band filling the gap between {@link #BASE} and the BCE transition;
  * the {@code BCE_TIER_*} rungs spell out the compression tier whose block-baseline ({@code 9^tier}) is their per-second
  * BCE rate, e.g. {@link #BCE_TIER_500} runs at one tier-500 block's BCE each second.
+ *
+ * <p>This ladder is band 0, so its array divisor is {@code 2^0 = 1}: a tier-0 generator mints exactly what its rung
+ * names and was never divided. It still joins the {@code MASTER_PLAN.md} D23 array - two {@code 9^500} generators on
+ * one BCE bus mint a whole tier-1000 block per second - which is where the rule starts and what makes the later bands
+ * ask for 4, 8, ... towers. {@link GeneratorCoreTier} carries the full statement of the rule.
  */
 public enum GeneratorTier implements StringRepresentable {
     BASE(-1, "base"),
@@ -58,14 +67,24 @@ public enum GeneratorTier implements StringRepresentable {
         return this.tierExponent;
     }
 
+    /** The band this ladder belongs to - the single blocks are band 0, whose array divisor is {@code 1}. */
+    public CompressionBand band() {
+        return CompressionBand.BAND_0;
+    }
+
+    /**
+     * The exponent this generator contributes to its bus ({@link CompressionBand#shareOf}). Band 0 divides nothing, so
+     * this equals {@link #tierExponent()}; it exists so the array has one rule for both generator families instead of a
+     * special case for the single blocks. Only meaningful for a BCE rung - {@link #BASE} and the item rungs mint
+     * physical cobblestone and are never array members.
+     */
+    public BigInteger shareExponent() {
+        return band().shareOf(BigInteger.valueOf(this.tierExponent));
+    }
+
     /** log10 of this rung's per-second output, in BCE (cobblestone-equivalents). */
     public double rateLog10PerSec() {
         return CompressionConfig.generatorRateLog10PerSec(this.tierExponent);
-    }
-
-    /** log10 of the per-tick addition (there are 20 ticks in a second): {@code rateLog - log10(20)}. */
-    public double rateLog10PerTick() {
-        return rateLog10PerSec() - Math.log10(20.0D);
     }
 
     /**
@@ -73,14 +92,13 @@ public enum GeneratorTier implements StringRepresentable {
      * <em>items</em>; false once the flow is astronomical and can only travel as raw BCE. {@link #BASE} and every rung
      * at {@code 9^n} with {@code n <= 8} qualify ({@code 9^9 > Integer.MAX_VALUE}; see
      * {@link CompressionConfig#GEN_ITEM_OUTPUT_LIMIT}).
+     *
+     * <p>A BCE rung no longer has a per-tick rate or a rung-sized buffer ceiling: the bus mints one lump per
+     * {@link CompressionConfig#GEN_MINT_PERIOD_TICKS} and sizes its own buffer - see
+     * {@link CobblestoneGeneratorBlockEntity} and {@link CompressionConfig#generatorLumpCeilingLog(double)}.
      */
     public boolean outputIsItems() {
         return rateLog10PerSec() <= Math.log10(CompressionConfig.GEN_ITEM_OUTPUT_LIMIT);
-    }
-
-    /** Buffer ceiling (log10 BCE) for a BCE rung - half a second's worth of its own output; unused for item rungs. */
-    public double bufferCeilingLog() {
-        return CompressionConfig.generatorBufferCeilingLog(this.tierExponent);
     }
 
     /**
@@ -98,13 +116,25 @@ public enum GeneratorTier implements StringRepresentable {
     /**
      * A compact, human-readable description of what this rung outputs, for the sneak-click chat readout. Item rungs
      * name their whole-cobblestone-per-second rate; BCE rungs name the compression tier whose block-baseline
-     * ({@code 9^n}) is their per-second BCE rate, so {@link #BCE_TIER_500} reads {@code "9^500 BCE/sec"}.
+     * ({@code 9^n}) is their per-second BCE rate, so {@link #BCE_TIER_500} reads {@code 9} with a superscript
+     * {@code 500} followed by {@code BCE/sec}.
      */
     public String describe() {
         if (outputIsItems()) {
             return ratePerSecondText() + " cobblestone/sec";
         }
-        return "9^" + tierExponent + " BCE/sec";
+        return BceNotation.flat(rateTower()) + " BCE/sec";
+    }
+
+    /**
+     * The rung's {@code 9^n} rate as a drawable power tower, or {@code null} for the rungs that still emit countable
+     * items - those have no exponent to stack, only a whole-number per-second count. {@link #describe()} flattens the
+     * same tower to text for chat, and {@link com.remag.rcc.item.CobblestoneGeneratorItem} hands it to the tooltip
+     * graphic so the exponent is <em>raised</em> rather than written with a caret.
+     */
+    @Nullable
+    public BceNotation.Tower rateTower() {
+        return outputIsItems() ? null : BceNotation.power("9", shareExponent());
     }
 
     /**

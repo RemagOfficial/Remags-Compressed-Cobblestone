@@ -180,7 +180,7 @@ public class DecompressorCoreBlockEntity extends BlockEntity
     public void onLoad() {
         super.onLoad();
         if (this.level != null) {
-            IMultiblockPortHost.invalidatePortCaps(this.level, this.worldPosition);
+            IMultiblockPortHost.invalidatePortCaps(this.level, this.worldPosition, this.portShellExtent());
         }
     }
 
