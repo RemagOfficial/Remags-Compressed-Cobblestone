@@ -29,7 +29,10 @@ import java.util.List;
 /**
  * Renders the seed in the Compression Manipulator core as a large 3D cube of the compressed-cobblestone block,
  * floating where the (small anvil) core model sits. The cube is scaled big enough - and concentric with the core -
- * that it always occludes the core block no matter how it is turned (see {@link CompressionConfig#SEED_CUBE_SCALE}).
+ * that it always occludes the core block no matter how it is turned. The cube grows with the machine's band (band 2's
+ * is 2x band 1's, and so on - see {@link CompressionConfig#seedCubeScale}), as do the lightning bolts and the
+ * completion flash, so a seed always fills its multiblock's chamber in proportion (see
+ * {@link CompressionConfig#effectGrowth}).
  * While a cycle is running the cube tumbles on all three axes at a slow, per-machine-random pace (governed by
  * {@link CompressionConfig#SEED_SPIN_SPEED}). The spin is driven by a machine-local clock that only advances while
  * crafting, so the cube keeps tumbling smoothly across back-to-back cycles (holding its orientation during the single
@@ -100,8 +103,14 @@ public class CompressionCoreRenderer implements BlockEntityRenderer<CompressionC
         // craft finished, so the pulse must not depend on there still being a cube to draw. The bolts themselves are
         // drawn AFTER the cube (see the end of this method) so they composite over it correctly.
         double renderTime = level != null ? level.getGameTime() + partialTick : 0.0D;
+        // The seed cube grows with the machine's band (band 2's cube is 2x band 1's, etc.) so a seed fills its bigger
+        // chamber, and the bolt origins follow that same cube scale. The completion flash is deliberately scaled by a
+        // different figure (see CompressionConfig.effectGrowth) because it must expand across the CHAMBER, not the cube:
+        // scaling it by the cube's faster growth made the larger bands' spokes punch clean out through the glass.
+        float seedScale = CompressionConfig.seedCubeScale(core.band());
+        float pulseGrowth = CompressionConfig.effectGrowth(core.band());
         if (level != null) {
-            driveEffects(core, level, renderTime);
+            driveEffects(core, level, renderTime, seedScale);
         }
 
         BigInteger tier = core.getRenderSeedTier();
@@ -114,7 +123,7 @@ public class CompressionCoreRenderer implements BlockEntityRenderer<CompressionC
             poseStack.translate(0.5D, 0.5D, 0.5D); // pivot at the block centre (ItemRenderer re-centres the 0..1 model)
             long gameTime = level != null ? level.getGameTime() : 0L;
             applySpin(poseStack, core.getBlockPos(), gameTime, partialTick, core.isCrafting());
-            poseStack.scale(CompressionConfig.SEED_CUBE_SCALE, CompressionConfig.SEED_CUBE_SCALE, CompressionConfig.SEED_CUBE_SCALE);
+            poseStack.scale(seedScale, seedScale, seedScale);
 
             this.itemRenderer.renderStatic(seed, ItemDisplayContext.NONE, LightTexture.pack(15, 15),
                     OverlayTexture.NO_OVERLAY, poseStack, bufferSource, level, 0);
@@ -126,7 +135,7 @@ public class CompressionCoreRenderer implements BlockEntityRenderer<CompressionC
         // flash begins at a radius beyond the cube's corner reach, so it reads around the cube even when another seed is
         // still queued. The far solid frame can still show through a faded bolt - inherent to a translucent effect, and minor.
         if (level != null) {
-            renderEffects(poseStack, bufferSource, core.getBlockPos(), renderTime);
+            renderEffects(poseStack, bufferSource, core.getBlockPos(), renderTime, pulseGrowth);
         }
     }
 
@@ -136,7 +145,7 @@ public class CompressionCoreRenderer implements BlockEntityRenderer<CompressionC
      * pulse, and the counter (rather than a crafting->idle edge) cannot be missed between two network syncs. Generated
      * geometry is stored with the current render-time so {@link #renderEffects} can age and fade it.
      */
-    private void driveEffects(CompressionCoreBlockEntity core, Level level, double renderTime) {
+    private void driveEffects(CompressionCoreBlockEntity core, Level level, double renderTime, float seedScale) {
         Vec3 centre = new Vec3(core.getBlockPos().getX() + 0.5D,
                 core.getBlockPos().getY() + 0.5D, core.getBlockPos().getZ() + 0.5D);
 
@@ -144,7 +153,7 @@ public class CompressionCoreRenderer implements BlockEntityRenderer<CompressionC
             long now = level.getGameTime();
             if (now >= core.clientNextZapTick) {
                 core.clientNextZapTick = now + CompressionConfig.ZAP_INTERVAL_TICKS;
-                for (Vec3[] bolt : CompressionEffects.generateBolts(centre)) {
+                for (Vec3[] bolt : CompressionEffects.generateBolts(centre, core.band().compressorRadius(), seedScale)) {
                     bolts.add(new BoltGeometry(bolt, renderTime, CompressionConfig.BOLT_TTL));
                 }
             }
@@ -171,7 +180,7 @@ public class CompressionCoreRenderer implements BlockEntityRenderer<CompressionC
      * translated to the block origin) by subtracting the corner; the flash is generated in local space directly about
      * the block centre. Each effect's alpha ramps down over its life so bolts and the flash fade rather than snap off.
      */
-    private void renderEffects(PoseStack poseStack, MultiBufferSource bufferSource, BlockPos corner, double now) {
+    private void renderEffects(PoseStack poseStack, MultiBufferSource bufferSource, BlockPos corner, double now, float pulseGrowth) {
         bolts.removeIf(bolt -> now - bolt.born >= bolt.ttl);
         pulses.removeIf(pulse -> now - pulse.born >= pulse.ttl);
         if (bolts.isEmpty() && pulses.isEmpty()) {
@@ -196,7 +205,9 @@ public class CompressionCoreRenderer implements BlockEntityRenderer<CompressionC
         }
 
         // The flash: a shell of radial spokes whose radius grows from PULSE_START_RADIUS (beyond the cube) toward
-        // PULSE_END_RADIUS as it fades, so it always presents a bright ring around the seed cube.
+        // PULSE_END_RADIUS as it fades, so it always presents a bright ring around the seed cube. The shell it expands
+        // across scales with the band's chamber (pulseGrowth) so a bigger multiblock gets a proportionally bigger - but
+        // still fully contained - flash; each spoke's LENGTH stays fixed so the spokes never reach past the glass.
         Vec3 centre = new Vec3(0.5D, 0.5D, 0.5D); // block centre in local space; pulses are generated directly here
         double pulseHalf = CompressionConfig.PULSE_WIDTH * 0.5D;
         for (Pulse pulse : pulses) {
@@ -207,8 +218,8 @@ public class CompressionCoreRenderer implements BlockEntityRenderer<CompressionC
                 t = 1.0F;
             }
             float ease = 1.0F - (1.0F - t) * (1.0F - t); // ease-out: pops big fast, then settles
-            double radius = CompressionConfig.PULSE_START_RADIUS
-                    + (CompressionConfig.PULSE_END_RADIUS - CompressionConfig.PULSE_START_RADIUS) * ease;
+            double radius = (CompressionConfig.PULSE_START_RADIUS
+                    + (CompressionConfig.PULSE_END_RADIUS - CompressionConfig.PULSE_START_RADIUS) * ease) * pulseGrowth;
             double outer = radius + CompressionConfig.PULSE_LEN;
             int alpha = (int) (255.0F * (1.0F - t));
             for (Vec3 dir : pulse.dirs) {

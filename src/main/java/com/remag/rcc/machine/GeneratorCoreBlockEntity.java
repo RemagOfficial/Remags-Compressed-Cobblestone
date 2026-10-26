@@ -31,8 +31,8 @@ import java.util.Set;
  * {@link CobblestoneGeneratorBlockEntity}. It seals one of the two interior slots of a four-tall tower (the other is
  * a 1x1 air shaft) and, while sealed by a valid shell, mints BCE straight onto the {@code 9^n} curve - from one
  * tier-1000 block's worth per second
- * ({@link GeneratorCoreTier#T1_P1000}, the tier-0 ladder's handover point) up to half a tier-{@code 10^12} block per
- * second ({@link GeneratorCoreTier#T1_HALF_BAND}). Which rung it runs on is the {@link GeneratorCoreBlock#RUNG}
+ * (rung 0, the tier-0 ladder's handover point) up to half a tier-{@code 10^15} block per second (the band's top rung).
+ * Which rung it runs on is the {@link GeneratorCoreBlock#RUNG}
  * block state, so one class covers the whole ladder exactly like {@link GeneratorTier} covers the single blocks.
  *
  * <p>Unlike the free tier-0 drip this fountain <em>costs</em> power: it burns
@@ -188,9 +188,21 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
         }
     }
 
-    /** The rung this core runs on, read live from the block state (kept in sync by placement and {@code setBlock}). */
+    /** The progression band this tower's core block belongs to (band 1 for any un-banded host). */
+    public CompressionBand band() {
+        return getBlockState().getBlock() instanceof GeneratorCoreBlock core
+                ? core.band() : CompressionBand.BAND_1;
+    }
+
+    /** The rung this core runs on, resolved live from this block's band and the {@code RUNG} index in its state. */
     public GeneratorCoreTier rung() {
-        return getBlockState().getValue(GeneratorCoreBlock.RUNG);
+        return new GeneratorCoreTier(band(), getBlockState().getValue(GeneratorCoreBlock.RUNG));
+    }
+
+    /** Sweep the capability cache across this band's tower box, not the band-1 default the interface carries. */
+    @Override
+    public int portShellExtent() {
+        return band().shellExtent();
     }
 
     // --- IMultiblockPortHost: what the shell ports forward -------------------------------------
@@ -339,7 +351,7 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
      * Name the single reason this tower is not depositing a lump right now, so a stalled array reads as a diagnosis
      * instead of a mystery. Precedence mirrors {@link #serverTick}: a broken shell explains everything, then a power
      * buffer below one tick's upkeep, then an undrained lump waiting on its pipe, then the array role - a member that
-     * is not the lead never deposits, and an array that has passed its band's ceiling reports the clamp.
+     * is not the lead never deposits, and an array that has passed two band-max blocks reports the clamp.
      */
     private String gateSummary(GeneratorCoreTier rung) {
         if (!formed) {
@@ -358,7 +370,7 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
         BceNetwork bus = this.bus;
         if (bus != null) {
             if (bus.isArrayClamped()) {
-                return "array full - clamped at this band's ceiling";
+                return "array full - clamped at two band-max blocks";
             }
             if (!bus.isGeneratorLead(this.worldPosition)) {
                 return "not the lead - this tower is upkeep only";
@@ -394,9 +406,10 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
         if (level == null || level.isClientSide()) {
             return;
         }
-        int r = CompressionConfig.GEN1_REGION_RADIUS;
-        int below = CompressionConfig.GEN1_LAYERS_BELOW;
-        int above = CompressionConfig.GEN1_LAYERS_ABOVE;
+        CompressionBand band = band();
+        int r = band.generatorHalfWidth();
+        int below = band.generatorLayersBelow();
+        int above = band.generatorLayersAbove();
         // Snapshot the old claim set so we can tell the shell's POWER ports (and any cable wired to a shared wall)
         // to re-resolve their owner count when this tower starts or stops co-owning one.
         List<BlockPos> oldPorts = this.powerPorts;
@@ -546,13 +559,13 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
                         } else {
                             return false;
                         }
-                    } else {
-                        return false; // an unexpected interior cell (core and shaft are the only two)
+                    } else if (!s.isAir()) {
+                        return false; // interior of a bigger band's column/walls must be hollow air (band 1 has none)
                     }
                 }
             }
         }
-        boolean ok = power >= CompressionConfig.MIN_GEN1_POWER_PORTS
+        boolean ok = power >= band().minPowerPorts()
                 && bceOut == CompressionConfig.EXACT_GEN1_BCE_OUT_PORTS
                 && interfaces >= CompressionConfig.MIN_INTERFACES
                 && interfaces <= CompressionConfig.MAX_INTERFACES
@@ -585,8 +598,8 @@ public class GeneratorCoreBlockEntity extends BlockEntity implements IMultiblock
             return false;
         }
         BlockState s = level.getBlockState(p);
-        return s.is(ModBlocks.GENERATOR_CORE.get())
-                && s.getValue(GeneratorCoreBlock.RUNG).band() == this.rung().band();
+        return s.getBlock() instanceof GeneratorCoreBlock core
+                && core.band() == this.rung().band();
     }
 
     // --- Persistence ---------------------------------------------------------------------------

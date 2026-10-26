@@ -35,10 +35,15 @@ public class ModBlockTagGenerator extends BlockTagsProvider {
                 .add(ModBlocks.BCE_PIPE.get())
                 .add(ModBlocks.BCE_STORAGE.get())
                 .add(ModBlocks.BCE_STORAGE_2.get())
+                .add(ModBlocks.BCE_STORAGE_3.get())
                 .add(ModBlocks.COBBLESTONE_GENERATOR.get())
                 // The tier-1 generator multiblock's core: a metal machine block like the other cores. It is not
                 // BCE_CONNECTABLE - it is sealed inside the tower, and pipes reach its pool through the ports.
-                .add(ModBlocks.GENERATOR_CORE.get());
+                .add(ModBlocks.GENERATOR_CORE.get())
+                // The band-2 cores: same metal family, sealed inside their shells, so pickaxe-only and not connectable.
+                .add(ModBlocks.COMPRESSION_CORE_2.get())
+                .add(ModBlocks.COMPRESSION_DECOMPRESSOR_CORE_2.get())
+                .add(ModBlocks.GENERATOR_CORE_2.get());
 
         // Blocks a pipe may bolt an end to. This is the list the connection arms are drawn from, so it has to be
         // exactly the set of blocks that register the BCE capability (see CommonEvents) minus the pipe itself, which
@@ -47,6 +52,7 @@ public class ModBlockTagGenerator extends BlockTagsProvider {
         this.tag(ModBlockTags.BCE_CONNECTABLE)
                 .add(ModBlocks.BCE_STORAGE.get())
                 .add(ModBlocks.BCE_STORAGE_2.get())
+                .add(ModBlocks.BCE_STORAGE_3.get())
                 .add(ModBlocks.COMPRESSION_AUTO.get())
                 .add(ModBlocks.COMPRESSION_AUTO_DECOMPRESSOR.get())
                 // Ports now register the BCE capability (delegating to whichever controller they resolve), so a pipe

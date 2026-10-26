@@ -3,6 +3,9 @@ package com.remag.rcc.client;
 import com.remag.rcc.RCC;
 import com.remag.rcc.menu.CompressionCoreMenu;
 import com.remag.rcc.network.BceGoalTierPayload;
+import com.remag.rcc.registry.BceNotation;
+import com.remag.rcc.registry.TowerListTooltipComponent;
+import com.remag.rcc.registry.TowerTooltipComponent;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -14,6 +17,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -204,7 +208,7 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
     protected void renderTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
         super.renderTooltip(graphics, mouseX, mouseY); // hovered-slot item tooltip, like every other menu
         if (hoverBar(mouseX, mouseY, FUEL_X)) {
-            graphics.renderTooltip(this.font, fuelTooltip(), Optional.empty(), mouseX, mouseY);
+            renderFuelTooltip(graphics, mouseX, mouseY);
         } else if (hoverBar(mouseX, mouseY, PROG_X)) {
             graphics.renderTooltip(this.font, progressTooltip(), Optional.empty(), mouseX, mouseY);
         } else if (hoverBar(mouseX, mouseY, POWER_X)) {
@@ -219,11 +223,22 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
         return mouseX >= bx && mouseX < bx + BAR_W && mouseY >= by && mouseY < by + BAR_H;
     }
 
-    private List<Component> fuelTooltip() {
-        return List.of(
-                Component.literal("Base Cobblestone Equivalent").withStyle(ChatFormatting.GOLD),
-                Component.literal(powerOfTen(this.menu.currentFuelLog()) + " / "
-                        + powerOfTen(this.menu.requiredFuelLog())));
+    /**
+     * Draws the fuel gauge's two BCE masses as real stacked power towers - the exact renderer the machine items' tooltips
+     * use ({@link ClientTowerTooltip}, reached through {@link TowerListTooltipComponent}) - so a huge log10 mass reads as
+     * {@code 10^(5.01 × 10^14)} with the exponent raised over the base rather than flattened into one glyph run. A
+     * tooltip only carries one custom graphic, so "Stored" and "Required" share it as two stacked rows in a
+     * {@link TowerListTooltipComponent}, and the header stays a normal text line.
+     */
+    private void renderFuelTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+        Component title = Component.literal("Base Cobblestone Equivalent").withStyle(ChatFormatting.GOLD);
+        List<TowerTooltipComponent> rows = new ArrayList<>(2);
+        rows.add(new TowerTooltipComponent(Component.literal("Stored: "),
+                BceNotation.magnitude(this.menu.currentFuelLog()), null));
+        rows.add(new TowerTooltipComponent(Component.literal("Required: "),
+                BceNotation.magnitude(this.menu.requiredFuelLog()), null));
+        graphics.renderTooltip(this.font, List.of(title),
+                Optional.of(new TowerListTooltipComponent(rows)), mouseX, mouseY);
     }
 
     private List<Component> progressTooltip() {
@@ -237,17 +252,6 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
         return List.of(
                 Component.literal("Energy").withStyle(ChatFormatting.GOLD),
                 Component.literal(String.format(Locale.US, "%,d / %,d FE", this.menu.energy(), this.menu.maxEnergy())));
-    }
-
-    /** Render a log10 mass as a compact {@code 10^N} cobblestone string; an empty pool shows as {@code 0}. */
-    private static String powerOfTen(double log) {
-        if (log == Double.NEGATIVE_INFINITY || Double.isNaN(log) || log <= 0.0) {
-            return "0";
-        }
-        if (Math.abs(log - Math.rint(log)) < 1e-3) {
-            return "10^" + (long) Math.rint(log);
-        }
-        return String.format(Locale.US, "10^%.1f", log);
     }
 
     @Override

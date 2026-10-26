@@ -27,8 +27,13 @@ import java.util.Random;
  * it is called from the client render loop only.
  */
 public final class CompressionEffects {
-    /** Half-extent of the zap target shell: the inner face of the glass layer (interior air is 3x3x3 about the core). */
-    private static final double WALL_HALF = 1.45D;
+    /**
+     * Gap left between a bolt's wall target and the chamber's inner glass face. The interior air spans
+     * {@code 2*compressorRadius - 1} blocks about the core, so its inner wall sits half a block inside the shell;
+     * pulling back a further {@code 0.05} keeps the bolt visibly <em>within</em> the glass rather than embedded in it.
+     * Band 1 ({@code r=2}) yields the historic {@code 1.45}, band 2 ({@code r=3}) a matching {@code 2.45}.
+     */
+    private static final double WALL_INSET = 0.55D;
 
     private static final Random RANDOM = new Random();
 
@@ -38,16 +43,20 @@ public final class CompressionEffects {
     /**
      * Builds one volley of jagged bolts from the spinning seed cube out to random points on the chamber walls.
      *
-     * @param centre world-space centre of the core (block centre)
+     * @param centre           world-space centre of the core (block centre)
+     * @param compressorRadius the band's shell half-width, which fixes how far the bolts reach toward the glass
+     * @param seedScale        the band-aware seed-cube side (see {@link CompressionConfig#seedCubeScale}); bolts start
+     *                         on this cube's surface so they read as the (bigger) cube discharging outward
      * @return one polyline per bolt, in world space; each array is the ordered vertices of that bolt
      */
-    public static List<Vec3[]> generateBolts(Vec3 centre) {
+    public static List<Vec3[]> generateBolts(Vec3 centre, int compressorRadius, double seedScale) {
         List<Vec3[]> bolts = new ArrayList<>(CompressionConfig.BOLTS_PER_ZAP);
-        double cubeRadius = CompressionConfig.SEED_CUBE_SCALE * 0.5D;
+        double cubeRadius = seedScale * 0.5D;
+        double wallHalf = compressorRadius - WALL_INSET;
         for (int i = 0; i < CompressionConfig.BOLTS_PER_ZAP; i++) {
             // Pick a point on the inner wall, then start the bolt on the cube surface along that same ray so it reads
             // as the cube discharging outward rather than two unrelated random points being connected.
-            Vec3 wall = randomPointOnCubeShell(centre, WALL_HALF);
+            Vec3 wall = randomPointOnCubeShell(centre, wallHalf);
             Vec3 outward = wall.subtract(centre);
             double outwardLen = outward.length();
             if (outwardLen < 1.0E-4D) {

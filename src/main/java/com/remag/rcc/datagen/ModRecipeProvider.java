@@ -18,6 +18,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.data.PackOutput;
 import net.minecraft.data.recipes.*;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -27,6 +28,7 @@ import net.neoforged.neoforge.common.conditions.IConditionBuilder;
 import net.neoforged.neoforge.common.crafting.DataComponentIngredient;
 
 import java.math.BigInteger;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public class ModRecipeProvider extends RecipeProvider implements IConditionBuilder {
@@ -171,8 +173,8 @@ public class ModRecipeProvider extends RecipeProvider implements IConditionBuild
                 .unlockedBy("has_interface", has(ModItems.COMPRESSION_INTERFACE.get()))
                 .save(pWriter, rl("bce_storage"));
 
-        // The tank ladder, shaped like the pipe ladder above: a tier-I tank plus a frame shell. No component matching
-        // is needed this time - the two tank tiers are separate items, so a plain ingredient already pins the rung.
+        // The tank ladder, shaped like the pipe ladder above: a previous-tier tank plus a frame shell. No component
+        // matching is needed this time - the tank tiers are separate items, so a plain ingredient already pins the rung.
         ShapedRecipeBuilder.shaped(RecipeCategory.MISC, new ItemStack(ModItems.BCE_STORAGE_2.get()))
                 .define('F', ModBlocks.FRAME.get())
                 .define('T', ModItems.BCE_STORAGE.get())
@@ -180,6 +182,15 @@ public class ModRecipeProvider extends RecipeProvider implements IConditionBuild
                 .pattern("FT")
                 .unlockedBy("has_storage", has(ModItems.BCE_STORAGE.get()))
                 .save(pWriter, rl("bce_storage_2"));
+
+        // Tier-three tank: one band-2 block's yield, the vault the band-2 machines were missing. Same rung shape.
+        ShapedRecipeBuilder.shaped(RecipeCategory.MISC, new ItemStack(ModItems.BCE_STORAGE_3.get()))
+                .define('F', ModBlocks.FRAME.get())
+                .define('T', ModItems.BCE_STORAGE_2.get())
+                .pattern("FF")
+                .pattern("FT")
+                .unlockedBy("has_storage", has(ModItems.BCE_STORAGE_2.get()))
+                .save(pWriter, rl("bce_storage_3"));
 
         // The wrench: iron heads on a stick. What makes it useful is not the shape but the tag - ModItemTagGenerator
         // publishes it onto c:tools/wrench, so it configures other mods' machines and theirs configure ours.
@@ -249,14 +260,35 @@ public class ModRecipeProvider extends RecipeProvider implements IConditionBuild
                 .unlockedBy("has_glass", has(ModItems.COMPRESSION_GLASS.get()))
                 .save(pWriter, rl("compression_interface"));
 
-        // The milestone every band-1 core is gated on, read from the band table instead of written as a literal: a
-        // band-2 core recipe will ask for BAND_2.rungStartExponent() and nothing else about this shape changes.
-        BigInteger milestone = bandOneMilestone();
+        // Band 1: the shipped line, unchanged in shape. The milestone is read from the band table rather than written
+        // as a literal, so band 2 reuses the exact same recipe shapes with only the numbers and items swapped.
+        buildCoreRecipes(pWriter, CompressionBand.BAND_1, ModItems.COMPRESSION_CORE.get(),
+                ModItems.COMPRESSION_DECOMPRESSOR_CORE.get(), ModItems.GENERATOR_CORE.get(),
+                "compression_core", "compression_decompressor_core", "generator_core");
+        // Band 2: the 7x7x7 compressor, 5x5x5 decompressor and 5x5x6 tower cores, gated on the 10^15 milestone and
+        // climbing their own rung ladder - every figure drawn from the band row through the same helpers.
+        buildCoreRecipes(pWriter, CompressionBand.BAND_2, ModItems.COMPRESSION_CORE_2.get(),
+                ModItems.COMPRESSION_DECOMPRESSOR_CORE_2.get(), ModItems.GENERATOR_CORE_2.get(),
+                "compression_core_2", "compression_decompressor_core_2", "generator_core_2");
+    }
+
+    /**
+     * The cores for one band: the compressor and decompressor controller (each a shell plus the band's milestone
+     * block), the base generator rung (index 0, crafted from a shell and milestone), and the rest of that band's
+     * generator rung ladder (each step spends the previous rung's core in the centre of four pieces of the milestone
+     * the rung mints). The shapes are band-agnostic - only the milestone tier, the items and the recipe ids vary - so
+     * a new band is one call, and the shipped band-1 line is reproduced exactly by the {@code bandOne} call above.
+     */
+    private void buildCoreRecipes(RecipeOutput pWriter, CompressionBand band, Item compressorItem,
+                                  Item decompressorItem, Item generatorCoreItem, String compressorId,
+                                  String decompressorId, String generatorCoreId) {
+        // The milestone every band's core is gated on, read from the band table: a band-2 core asks for
+        // BAND_2.rungStartExponent() and nothing about these shapes changes.
+        BigInteger milestone = band.rungStartExponent();
         Ingredient heart = Progression.compressedTierIngredient(milestone);
         Criterion<?> hasHeart = Progression.hasCompressedTier(milestone);
 
-        ItemStack compressorCore = new ItemStack(ModItems.COMPRESSION_CORE.get());
-        ShapedRecipeBuilder.shaped(RecipeCategory.MISC, compressorCore)
+        ShapedRecipeBuilder.shaped(RecipeCategory.MISC, new ItemStack(compressorItem))
                 .define('F', ModBlocks.FRAME.get())
                 .define('P', ModItems.COMPRESSION_PORT.get())
                 .define('H', heart)
@@ -264,12 +296,12 @@ public class ModRecipeProvider extends RecipeProvider implements IConditionBuild
                 .pattern("PHP")
                 .pattern("FPF")
                 .unlockedBy("has_milestone_cobblestone", hasHeart)
-                .save(pWriter, rl("compression_core"));
+                .save(pWriter, rl(compressorId));
 
         // The decompressor core mirrors it, with viewing glass where the compressor has structural frame - and it is
-        // unlocked by owning the compressor core, because climbing back down is only interesting once you can climb up.
-        ItemStack decompressorCore = new ItemStack(ModItems.COMPRESSION_DECOMPRESSOR_CORE.get());
-        ShapedRecipeBuilder.shaped(RecipeCategory.MISC, decompressorCore)
+        // unlocked by owning its band's compressor core, because climbing back down is only interesting once you can
+        // climb up.
+        ShapedRecipeBuilder.shaped(RecipeCategory.MISC, new ItemStack(decompressorItem))
                 .define('G', ModBlocks.GLASS.get())
                 .define('P', ModItems.COMPRESSION_PORT.get())
                 .define('H', heart)
@@ -277,14 +309,13 @@ public class ModRecipeProvider extends RecipeProvider implements IConditionBuild
                 .pattern("PHP")
                 .pattern("GPG")
                 .unlockedBy("has_milestone_cobblestone", hasHeart)
-                .unlockedBy("has_compression_core", has(ModItems.COMPRESSION_CORE.get()))
-                .save(pWriter, rl("compression_decompressor_core"));
+                .unlockedBy("has_compression_core", has(compressorItem))
+                .save(pWriter, rl(decompressorId));
 
-        // The tier-1 generator's core, mirroring the single-block generator ladder (power face above, milestone
-        // blocks either side of a frame, a redstone drive below). The result is preset to rung I through its
-        // {@code block_state} component. That is not decoration: {@link DataComponentIngredient} needs the component
-        // to be present at all, so an unspecced rung-I core would be the only link the ladder below could not make.
-        ShapedRecipeBuilder.shaped(RecipeCategory.MISC, generatorCoreStack(GeneratorCoreTier.T1_P1000))
+        // The base generator core (rung index 0), preset through its {@code block_state} component so the ladder
+        // below has a link to match: an unspecced rung-I core would otherwise be the one rung no craft could reach.
+        List<GeneratorCoreTier> rungs = GeneratorCoreTier.rungsFor(band);
+        ShapedRecipeBuilder.shaped(RecipeCategory.MISC, generatorCoreStack(generatorCoreItem, rungs.get(0)))
                 .define('P', ModItems.COMPRESSION_PORT.get())
                 .define('C', heart)
                 .define('F', ModBlocks.FRAME.get())
@@ -293,40 +324,25 @@ public class ModRecipeProvider extends RecipeProvider implements IConditionBuild
                 .pattern("CFC")
                 .pattern(" R ")
                 .unlockedBy("has_milestone_cobblestone", hasHeart)
-                .save(pWriter, rl("generator_core"));
+                .save(pWriter, rl(generatorCoreId));
 
-        // The rest of the BCE fountain ladder. Rungs II..X were never missing from the machine - the block entity has
-        // always read its rate and FE price live off the RUNG state, and the creative tab lists all ten - they were
-        // only missing from the craftable line. Each step spends the previous rung's core (so climbing costs the old
-        // run, as the pipe ladder does) in the centre of four pieces of the milestone that rung mints, which keeps the
-        // gate the progression itself instead of a pile of old cores: one rung per craft, so the cost cannot grow
-        // exponentially the way the two-pipe ladder's would over ten steps. PLACEHOLDER counts as always. Each is id'd
-        // {@code generator_core_<rung>}.
-        GeneratorCoreTier[] rungs = GeneratorCoreTier.values();
-        for (int i = 1; i < rungs.length; i++) {
-            GeneratorCoreTier previous = rungs[i - 1];
-            GeneratorCoreTier rung = rungs[i];
-            ShapedRecipeBuilder.shaped(RecipeCategory.MISC, generatorCoreStack(rung))
+        // The rest of this band's BCE fountain ladder. Each step spends the previous rung's core (so climbing costs
+        // the old run) in the centre of four pieces of the milestone that rung mints - one rung per craft, so the
+        // cost cannot grow exponentially. PLACEHOLDER counts as always. Each is id'd {@code generator_core_<rung>}.
+        for (int i = 1; i < rungs.size(); i++) {
+            GeneratorCoreTier previous = rungs.get(i - 1);
+            GeneratorCoreTier rung = rungs.get(i);
+            ShapedRecipeBuilder.shaped(RecipeCategory.MISC, generatorCoreStack(generatorCoreItem, rung))
                     .define('C', DataComponentIngredient.of(false, DataComponents.BLOCK_STATE,
-                            rungState(previous), ModItems.GENERATOR_CORE.get()))
+                            rungState(previous), generatorCoreItem))
                     .define('H', Progression.compressedTierIngredient(rung.tierExponent()))
                     .pattern("H H")
                     .pattern(" C ")
                     .pattern("H H")
-                    .unlockedBy("has_generator_core", has(ModItems.GENERATOR_CORE.get()))
+                    .unlockedBy("has_generator_core", has(generatorCoreItem))
                     .unlockedBy("has_rung_cobblestone", Progression.hasCompressedTier(rung.tierExponent()))
                     .save(pWriter, rl("generator_core_" + rung.getSerializedName()));
         }
-    }
-
-    /**
-     * The compressed cobblestone tier every band-1 machine is gated on: the band's rung start, which by the table's
-     * handover rule <em>is</em> the previous band's ceiling ({@code 1000}). Derived from {@link CompressionBand} so
-     * the recipe line cannot drift from the numbers the machines themselves enforce when they check a seed's tier
-     * ({@link com.remag.rcc.machine.CompressionCoreBlockEntity}'s min-in / max-out gates).
-     */
-    private static BigInteger bandOneMilestone() {
-        return CompressionBand.BAND_1.rungStartExponent();
     }
 
     /** A recipe result/match stack for one pipe tier, carrying the {@code block_state} component like the tab entries. */
@@ -341,19 +357,19 @@ public class ModRecipeProvider extends RecipeProvider implements IConditionBuild
      * {@link com.remag.rcc.block.ModCreativeModeTab}'s entries - which is what lets the ladder's ingredient match it
      * and what makes the item's name and tooltip read {@code "Generator Core (VII)"}.
      */
-    private static ItemStack generatorCoreStack(GeneratorCoreTier rung) {
-        ItemStack stack = new ItemStack(ModItems.GENERATOR_CORE.get());
+    private static ItemStack generatorCoreStack(Item coreItem, GeneratorCoreTier rung) {
+        ItemStack stack = new ItemStack(coreItem);
         stack.set(DataComponents.BLOCK_STATE, rungState(rung));
         return stack;
     }
 
     /**
      * The state selection for one rung, shared by {@link #generatorCoreStack} and the ladder's matching ingredient.
-     * Only the rung: {@code RUNG} is the block's whole state definition, so a crafted stack, a broken one and a
+     * Only the rung index: {@code RUNG} is the block's whole state definition, so a crafted stack, a broken one and a
      * creative-tab one all serialise to the same value, which an exact component match requires.
      */
     private static BlockItemStateProperties rungState(GeneratorCoreTier rung) {
-        return BlockItemStateProperties.EMPTY.with(GeneratorCoreBlock.RUNG, rung);
+        return BlockItemStateProperties.EMPTY.with(GeneratorCoreBlock.RUNG, rung.index());
     }
 
     /**

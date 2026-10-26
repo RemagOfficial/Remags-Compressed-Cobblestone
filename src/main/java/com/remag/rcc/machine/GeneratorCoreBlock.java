@@ -1,6 +1,7 @@
 package com.remag.rcc.machine;
 
 import com.remag.rcc.block.entity.ModBlockEntities;
+import com.remag.rcc.registry.CompressionBand;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -18,7 +19,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
@@ -36,12 +37,36 @@ import org.jetbrains.annotations.Nullable;
  * so the block keeps a single model.
  */
 public class GeneratorCoreBlock extends Block implements EntityBlock {
-    public static final EnumProperty<GeneratorCoreTier> RUNG =
-            EnumProperty.create("rung", GeneratorCoreTier.class);
+    /**
+     * The rung index within this block's band ladder, a bounded {@code int} rather than a fixed enum so a new band's
+     * differently-sized ladder needs no new property constants (see {@link GeneratorCoreTier} for how an index and a
+     * band resolve to a rung's rate, share and FE bill). The bound is the widest ladder in the
+     * {@link CompressionBand} table; a narrower band simply never places the high indices.
+     */
+    public static final IntegerProperty RUNG =
+            IntegerProperty.create("rung", 0, CompressionBand.maxRungCount() - 1);
+
+    /** The progression band whose rung ladder this core block runs; one class serves every band. */
+    private final CompressionBand band;
 
     public GeneratorCoreBlock(BlockBehaviour.Properties properties) {
+        this(properties, CompressionBand.BAND_1);
+    }
+
+    public GeneratorCoreBlock(BlockBehaviour.Properties properties, CompressionBand band) {
         super(properties);
-        this.registerDefaultState(this.stateDefinition.any().setValue(RUNG, GeneratorCoreTier.T1_P1000));
+        this.band = band;
+        this.registerDefaultState(this.stateDefinition.any().setValue(RUNG, 0));
+    }
+
+    /** The band whose rung ladder and array divisor this core's rungs are drawn from. */
+    public CompressionBand band() {
+        return this.band;
+    }
+
+    /** Resolve the rung this state runs on: this block's band and the {@link #RUNG} index it carries. */
+    public GeneratorCoreTier rungFor(BlockState state) {
+        return new GeneratorCoreTier(this.band, state.getValue(RUNG));
     }
 
     @Nullable
@@ -56,22 +81,24 @@ public class GeneratorCoreBlock extends Block implements EntityBlock {
     }
 
     /**
-     * Place on the rung carried on the held stack's {@code block_state} component (the creative-tab per-rung
-     * entries and any broken-and-replaced core), defaulting to {@link GeneratorCoreTier#T1_P1000} when the stack
-     * names none - the {@link CobblestoneGeneratorBlock#getStateForPlacement} route.
+     * Place on the rung index carried on the held stack's {@code block_state} component (the creative-tab per-rung
+     * entries and any broken-and-replaced core), defaulting to the band's base rung (index 0) when the stack names
+     * none - the {@link CobblestoneGeneratorBlock#getStateForPlacement} route. The index is clamped to this band's
+     * own ladder length so a foreign high index can never aim a narrower band's core off the end of its rungs.
      */
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        GeneratorCoreTier rung = GeneratorCoreTier.T1_P1000;
+        int rung = 0;
         BlockItemStateProperties stateProps = context.getItemInHand().get(DataComponents.BLOCK_STATE);
         if (stateProps != null) {
-            GeneratorCoreTier fromItem = stateProps.get(RUNG);
+            Integer fromItem = stateProps.get(RUNG);
             if (fromItem != null) {
                 rung = fromItem;
             }
         }
-        return this.defaultBlockState().setValue(RUNG, rung);
+        int lastRung = Math.max(0, this.band.rungExponents().size() - 1);
+        return this.defaultBlockState().setValue(RUNG, Math.min(Math.max(rung, 0), lastRung));
     }
 
     @Nullable
@@ -102,7 +129,7 @@ public class GeneratorCoreBlock extends Block implements EntityBlock {
         }
         if (level.getBlockEntity(pos) instanceof GeneratorCoreBlockEntity core) {
             player.displayClientMessage(Component.translatable("chat.rcc.generator_core.status",
-                    Component.literal(state.getValue(RUNG).displaySuffix()).withStyle(ChatFormatting.GOLD),
+                    Component.literal(rungFor(state).displaySuffix()).withStyle(ChatFormatting.GOLD),
                     Component.literal(core.contentsSummary()).withStyle(ChatFormatting.GRAY)), false);
             return InteractionResult.SUCCESS;
         }

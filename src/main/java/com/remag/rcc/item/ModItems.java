@@ -40,9 +40,19 @@ public class ModItems {
             ITEMS.register("compression_core",
                     () -> new BlockItem(ModBlocks.CORE.get(), new Item.Properties()));
 
+    /** The band-2 compressor core (7x7x7 shell); the block supplies the band, the item is a plain block item. */
+    public static final DeferredItem<Item> COMPRESSION_CORE_2 =
+            ITEMS.register("compression_core_2",
+                    () -> new BlockItem(ModBlocks.COMPRESSION_CORE_2.get(), new Item.Properties()));
+
     public static final DeferredItem<Item> COMPRESSION_DECOMPRESSOR_CORE =
             ITEMS.register("compression_decompressor_core",
                     () -> new BlockItem(ModBlocks.COMPRESSION_DECOMPRESSOR_CORE.get(), new Item.Properties()));
+
+    /** The band-2 decompressor core (5x5x5 descent shell); the block supplies the band. */
+    public static final DeferredItem<Item> COMPRESSION_DECOMPRESSOR_CORE_2 =
+            ITEMS.register("compression_decompressor_core_2",
+                    () -> new BlockItem(ModBlocks.COMPRESSION_DECOMPRESSOR_CORE_2.get(), new Item.Properties()));
 
     public static final DeferredItem<Item> COMPRESSION_INTERFACE =
             ITEMS.register("compression_interface",
@@ -72,6 +82,11 @@ public class ModItems {
             ITEMS.register("bce_storage_2",
                     () -> new BlockItem(ModBlocks.BCE_STORAGE_2.get(), new Item.Properties()));
 
+    /** The tier-three tank, sized to the band-2 multiblock; again just a BlockItem over its tank block. */
+    public static final DeferredItem<Item> BCE_STORAGE_3 =
+            ITEMS.register("bce_storage_3",
+                    () -> new BlockItem(ModBlocks.BCE_STORAGE_3.get(), new Item.Properties()));
+
     /** The generator item; its rung comes from the stack's {@code block_state} component (defaults to BASE). */
     public static final DeferredItem<Item> COBBLESTONE_GENERATOR =
             ITEMS.register("cobblestone_generator",
@@ -81,6 +96,11 @@ public class ModItems {
     public static final DeferredItem<Item> GENERATOR_CORE =
             ITEMS.register("generator_core",
                     () -> new GeneratorCoreItem(ModBlocks.GENERATOR_CORE.get(), new Item.Properties()));
+
+    /** The band-2 generator multiblock's core; the block supplies the band and the rung index rides the state. */
+    public static final DeferredItem<Item> GENERATOR_CORE_2 =
+            ITEMS.register("generator_core_2",
+                    () -> new GeneratorCoreItem(ModBlocks.GENERATOR_CORE_2.get(), new Item.Properties()));
 
     /**
      * The configuration tool: right-click a BCE pipe with it to flip that end between extract and insert. It carries

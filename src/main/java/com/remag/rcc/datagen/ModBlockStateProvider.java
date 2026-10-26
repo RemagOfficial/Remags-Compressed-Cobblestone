@@ -68,11 +68,16 @@ public class ModBlockStateProvider extends BlockStateProvider {
         coreBlock();
         decompressorCoreBlock();
         generatorCoreBlock();
+        coreBlock(ModBlocks.COMPRESSION_CORE_2.get(), "compression_core_2");
+        coreBlock(ModBlocks.COMPRESSION_DECOMPRESSOR_CORE_2.get(), "compression_decompressor_core_2");
+        coreBlock(ModBlocks.GENERATOR_CORE_2.get(), "generator_core_2");
         bcePipe();
         simpleCubeWithItem(ModBlocks.BCE_STORAGE.get(), "bce_storage", INTERFACE_TEX);
         // Tier-two tank: same placeholder art for now (the size difference is a number, not a silhouette - dedicated
         // art follows the same deferral as the tank ladder's other assets).
         simpleCubeWithItem(ModBlocks.BCE_STORAGE_2.get(), "bce_storage_2", INTERFACE_TEX);
+        // Tier-three tank: same placeholder art again; only the pool ceiling changes between tank tiers.
+        simpleCubeWithItem(ModBlocks.BCE_STORAGE_3.get(), "bce_storage_3", INTERFACE_TEX);
         cobblestoneGenerator();
         wrenchItem();
     }
@@ -178,6 +183,17 @@ public class ModBlockStateProvider extends BlockStateProvider {
     }
 
     /**
+     * A later-band core reuses the same hand-authored core model and non-occluding single-variant block state as
+     * {@link #coreBlock()} - only the blockstate and item model names are new, so {@code runData} never overwrites
+     * the shared model file. Band 2's three cores (compressor, decompressor, generator) all route through here.
+     */
+    private void coreBlock(Block block, String name) {
+        ModelFile core = models().getExistingFile(modLoc("block/compression_core"));
+        simpleBlock(block, core);
+        itemModels().getBuilder(name).parent(core);
+    }
+
+    /**
      * The Decompression Manipulator's core reuses the {@link #coreBlock() Compression Manipulator's hand-authored
      * core model} (the same anvil-like controller art) - it is the same kind of sealed centre block, so there is no
      * reason for a second model file. Only the generated blockstate and the item model name are new, so the asset
@@ -212,9 +228,9 @@ public class ModBlockStateProvider extends BlockStateProvider {
      * {@link #coreBlock()}. Everything generated here is a wrapper or a selector:
      *
      * <ul>
-     *   <li>2 tiers x 5 bases = 10 wrapper models, each four lines, each just pointing the metal layer {@code 0} at
+     *   <li>3 tiers x 5 bases = 15 wrapper models, each four lines, each just pointing the metal layer {@code 0} at
      *       its tier's texture - which is why per-tier art costs no geometry;</li>
-     *   <li>one multipart block state: an unconditional hub per tier, plus 6 directions x 3 modes x 2 tiers of arms.
+     *   <li>one multipart block state: an unconditional hub per tier, plus 6 directions x 3 modes x 3 tiers of arms.
      *       Each arm is selected by the {@code *_end} property of the side it points along, so a side reading
      *       {@code off} contributes no part at all (that is what makes the end state double as the connection flag),
      *       and the mode selects which of the three caps gets drawn. The directions are the <em>same arm model

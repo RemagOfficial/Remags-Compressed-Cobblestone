@@ -2,6 +2,7 @@ package com.remag.rcc.item;
 
 import com.remag.rcc.machine.GeneratorCoreBlock;
 import com.remag.rcc.machine.GeneratorCoreTier;
+import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.TowerTooltipComponent;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
@@ -20,11 +21,11 @@ import java.util.Optional;
 /**
  * The single item behind every tier-1 generator rung. The rung rides on the stack's vanilla {@code block_state}
  * component (the {@link CobblestoneGeneratorItem} route), so one registration covers the whole ladder while each
- * creative entry still reads distinctly: {@code "Generator Core (I)"} .. {@code "Generator Core (X)"}.
+ * creative entry still reads distinctly: {@code "Generator Core (I)"} .. {@code "Generator Core (XIII)"}.
  *
  * <p>The hover text names the rung's per-second mint and its FE/t price - the two numbers that define where a
  * Generation Manipulator sits on the ladder - and points at the 3x3x4 tower it must be sealed inside. The mint is
- * {@code 9^n} with an {@code n} that runs from {@code 1000} to {@code 5*10^11} and past, so it is <em>drawn</em> as a
+ * {@code 9^n} with an {@code n} that runs from {@code 1000} to {@code 5*10^14} and past, so it is <em>drawn</em> as a
  * power tower by {@link #getTooltipImage(ItemStack)} instead of written as a text line: top-of-ladder rungs need two
  * raised levels, which no font string can express.
  */
@@ -71,15 +72,12 @@ public class GeneratorCoreItem extends BlockItem {
                 Component.translatable("tooltip.rcc.generator.rate.unit")));
     }
 
-    /** The rung this stack places as: read off the {@code block_state} component, defaulting to the ladder's base. */
+    /** The rung this stack places as: this item's band plus the index on its {@code block_state} component. */
     private GeneratorCoreTier rungOf(ItemStack stack) {
+        CompressionBand band = getBlock() instanceof GeneratorCoreBlock core
+                ? core.band() : CompressionBand.BAND_1;
         BlockItemStateProperties stateProps = stack.get(DataComponents.BLOCK_STATE);
-        if (stateProps != null) {
-            GeneratorCoreTier fromState = stateProps.get(GeneratorCoreBlock.RUNG);
-            if (fromState != null) {
-                return fromState;
-            }
-        }
-        return GeneratorCoreTier.T1_P1000;
+        Integer index = stateProps == null ? null : stateProps.get(GeneratorCoreBlock.RUNG);
+        return new GeneratorCoreTier(band, index == null ? 0 : index);
     }
 }

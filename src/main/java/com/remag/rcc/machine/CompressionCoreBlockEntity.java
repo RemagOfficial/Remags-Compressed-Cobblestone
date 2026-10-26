@@ -5,6 +5,7 @@ import com.remag.rcc.block.entity.ModBlockEntities;
 import com.remag.rcc.energy.IBceStorage;
 import com.remag.rcc.item.ModItems;
 import com.remag.rcc.menu.CompressionCoreMenu;
+import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.CompressionConfig;
 import com.remag.rcc.registry.ModDataComponents;
 import net.minecraft.core.BlockPos;
@@ -43,8 +44,8 @@ import java.util.Objects;
  * start the seed and the whole fuel pool are consumed and FE drains across the craft.
  *
  * <p>The band ceiling is a <em>hard</em> cap the ladder must still be able to reach. Because
- * {@link CompressionConfig#MANIPULATOR_MAX_OUT} ({@code 10^12}) is not a power-of-two multiple of the smallest seed
- * ({@code 1000}), plain doubling tops out at {@code 1000 * 2^29 = 5.37e11} and could never land on it, so the
+ * {@link CompressionConfig#MANIPULATOR_MAX_OUT} ({@code 10^15}) is not a power-of-two multiple of the smallest seed
+ * ({@code 1000}), plain doubling tops out at {@code 1000 * 2^29 = 5.37e14} and could never land on it, so the
  * <em>final</em> craft compresses by <em>less</em> than double and clamps exactly onto the ceiling (see {@link
  * #nextOutputTier}). Its fuel and FE bills are <b>not</b> reduced for that shorter step - over-asking is harmless
  * where precision-loss duplication already makes mass abundant.
@@ -120,7 +121,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
         @Override
         public double getMaxBceLog() {
-            return CompressionConfig.MANIPULATOR_BCE_CAPACITY_LOG;
+            return CompressionCoreBlockEntity.this.band().sinkCeilingLog();
         }
 
         @Override
@@ -129,7 +130,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
                 return Double.NEGATIVE_INFINITY;
             }
             double free = CompressionConfig.log10subtract(
-                    CompressionConfig.MANIPULATOR_BCE_CAPACITY_LOG, CompressionCoreBlockEntity.this.fuelPool);
+                    CompressionCoreBlockEntity.this.band().sinkCeilingLog(), CompressionCoreBlockEntity.this.fuelPool);
             if (free == Double.NEGATIVE_INFINITY) {
                 return Double.NEGATIVE_INFINITY; // pool full: nothing a bus pushes will land until it is spent
             }
@@ -138,7 +139,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
                 double merged = CompressionConfig.log10add(
                         CompressionCoreBlockEntity.this.fuelPool, accepted);
                 CompressionCoreBlockEntity.this.fuelPool =
-                        Math.min(merged, CompressionConfig.MANIPULATOR_BCE_CAPACITY_LOG);
+                        Math.min(merged, CompressionCoreBlockEntity.this.band().sinkCeilingLog());
                 setChanged();
             }
             return accepted;
@@ -159,7 +160,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             return false;
         }
     };
-    /** 0 when idle, otherwise counting up to {@link CompressionConfig#TICKS_PER_CRAFT}. */
+    /** 0 when idle, otherwise counting up to this band's {@link CompressionConfig#craftTicks} cycle length. */
     private int progress = 0;
     /** Result tier of an in-progress craft, so a reload can finish what it started. */
     @Nullable
@@ -203,6 +204,18 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
     public CompressionCoreBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.COMPRESSION_CORE.get(), pos, state);
+    }
+
+    /** The progression band this core's block belongs to; drives the shell radius, port floor and tier ceilings. */
+    public CompressionBand band() {
+        return getBlockState().getBlock() instanceof CompressionCoreBlock core
+                ? core.band() : CompressionBand.BAND_1;
+    }
+
+    /** Sweep the capability cache across this band's shell box, not the band-1 default the interface carries. */
+    @Override
+    public int portShellExtent() {
+        return band().shellExtent();
     }
 
     /**
@@ -285,7 +298,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
     @Override
     public int getProgressMax() {
-        return CompressionConfig.TICKS_PER_CRAFT;
+        return CompressionConfig.craftTicks(band());
     }
 
     /** Seed tier the client BER should render as the spinning cube, or {@code null} when there is nothing to show. */
@@ -350,7 +363,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             return false;
         }
         BigInteger n = seedTier();
-        if (n == null || n.compareTo(CompressionConfig.MANIPULATOR_MIN_IN) < 0) {
+        if (n == null || n.compareTo(band().minInputTier()) < 0) {
             return false;
         }
         BigInteger out = nextOutputTier(n);
@@ -413,9 +426,12 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             be.scanRegion();
         }
         if (be.progress > 0) {
-            int perTick = Math.max(1, CompressionConfig.ENERGY_PER_CRAFT / CompressionConfig.TICKS_PER_CRAFT);
+            // Craft time grows with the band (1.5x per tier above band 1), so both the FE drain rate and the completion
+            // threshold read the same band-aware figure the progress bar shows.
+            int craftTicks = CompressionConfig.craftTicks(be.band());
+            int perTick = Math.max(1, CompressionConfig.ENERGY_PER_CRAFT / craftTicks);
             be.drainEnergy(Math.min(perTick, be.energy));
-            if (++be.progress >= CompressionConfig.TICKS_PER_CRAFT) {
+            if (++be.progress >= craftTicks) {
                 be.completeCraft();
             } else {
                 be.setChanged();
@@ -449,16 +465,16 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
     /**
      * The tier a cycle seeded at {@code n} produces: the ordinary doubling {@code 2n}, <b>except</b> on the rung whose
-     * double would overshoot the band ceiling. {@link CompressionConfig#MANIPULATOR_MAX_OUT} ({@code 10^12}) is not a
+     * double would overshoot the band ceiling. {@link CompressionConfig#MANIPULATOR_MAX_OUT} ({@code 10^15}) is not a
      * clean power-of-two multiple of {@link CompressionConfig#MANIPULATOR_MIN_IN} ({@code 1000}), so doubling alone
-     * would stop at {@code 1000 * 2^29 = 5.37e11} and the ceiling could never be minted; the final craft therefore
+     * would stop at {@code 1000 * 2^29 = 5.37e14} and the ceiling could never be minted; the final craft therefore
      * compresses by <em>less</em> than double and clamps exactly onto the cap. Returns {@code null} when {@code n} has
      * already reached (or passed) the cap, so there is nothing above it to climb to. Deliberately <b>not</b> used to
      * cheapen the final craft's fuel/FE cost - both cycle gates still price off the seed {@code n} as any other rung.
      */
     @Nullable
-    private static BigInteger nextOutputTier(BigInteger n) {
-        BigInteger cap = CompressionConfig.MANIPULATOR_MAX_OUT;
+    private BigInteger nextOutputTier(BigInteger n) {
+        BigInteger cap = band().maxOutputTier();
         if (n.compareTo(cap) >= 0) {
             return null;
         }
@@ -484,7 +500,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         if (level == null || level.isClientSide()) {
             return;
         }
-        int r = CompressionConfig.REGION_RADIUS;
+        int r = band().compressorRadius();
         int power = 0;
         int itemIn = 0;
         int itemOut = 0;
@@ -534,7 +550,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             }
         }
         boolean result = ok
-                && power >= CompressionConfig.MIN_POWER_PORTS
+                && power >= band().minPowerPorts()
                 && itemIn >= CompressionConfig.MIN_ITEM_IN_PORTS
                 && itemOut >= CompressionConfig.MIN_ITEM_OUT_PORTS
                 && interfaces >= CompressionConfig.MIN_INTERFACES
@@ -558,7 +574,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             if (!level.isLoaded(p)) {
                 continue;
             }
-            if (level.getBlockState(p).is(ModBlocks.CORE.get())
+            if (level.getBlockState(p).getBlock() instanceof CompressionCoreBlock
                     && level.getBlockEntity(p) instanceof CompressionCoreBlockEntity core) {
                 return core;
             }

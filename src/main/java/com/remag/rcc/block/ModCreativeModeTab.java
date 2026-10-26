@@ -10,12 +10,14 @@ import com.remag.rcc.machine.GeneratorCoreBlock;
 import com.remag.rcc.machine.GeneratorCoreTier;
 import com.remag.rcc.machine.GeneratorTier;
 import com.remag.rcc.machine.PortType;
+import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.CompressionConfig;
 import com.remag.rcc.registry.ModDataComponents;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.BlockItemStateProperties;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -72,17 +74,23 @@ public class ModCreativeModeTab {
                                 // The tier-1 Decompression Manipulator core (the 3x3x3 reverse multiblock; reuses
                                 // the shell blocks above).
                                 output.accept(new ItemStack(ModItems.COMPRESSION_DECOMPRESSOR_CORE.get()));
+                                // The band-2 cores: 7x7x7 compressor and 5x5x5 decompressor, same classes reading
+                                // their geometry off CompressionBand.BAND_2 (reusing the shell blocks above).
+                                output.accept(new ItemStack(ModItems.COMPRESSION_CORE_2.get()));
+                                output.accept(new ItemStack(ModItems.COMPRESSION_DECOMPRESSOR_CORE_2.get()));
                                 // The single-block Auto-Compressor (automates the tier 1..1000 climb).
                                 output.accept(new ItemStack(ModItems.COMPRESSION_AUTO.get()));
                                 // The single-block Auto Decompressor (the reverse: banks released mass as BCE).
                                 output.accept(new ItemStack(ModItems.COMPRESSION_AUTO_DECOMPRESSOR.get()));
-                                // BCE logistics: two throughput tiers (each placeable as either end - the direction
-                                // is set in world with the wrench), the tanks they fill, and the wrench itself.
+                                // BCE logistics: one throughput tier per machine band (each placeable as either end -
+                                // the direction is set in world with the wrench), the tanks they fill, and the wrench
+                                // itself. The pipe loop is over BcePipeTier.values(), so a new tier appears automatically.
                                 for (BcePipeTier tier : BcePipeTier.values()) {
                                     output.accept(pipeStack(tier));
                                 }
                                 output.accept(new ItemStack(ModItems.BCE_STORAGE.get()));
                                 output.accept(new ItemStack(ModItems.BCE_STORAGE_2.get()));
+                                output.accept(new ItemStack(ModItems.BCE_STORAGE_3.get()));
                                 output.accept(new ItemStack(ModItems.WRENCH.get()));
                                 // Cobblestone generators: one entry per rung of the output ladder (item drip up to
                                 // the top BCE tier), each preset through the block_state component the block reads
@@ -90,10 +98,13 @@ public class ModCreativeModeTab {
                                 for (GeneratorTier tier : GeneratorTier.values()) {
                                     output.accept(generatorStack(tier));
                                 }
-                                // The tier-1 generator multiblock's cores: one entry per rung of the BCE fountain
-                                // ladder, each preset the same block_state way (the 3x3x4 tower is built in world).
-                                for (GeneratorCoreTier rung : GeneratorCoreTier.values()) {
-                                    output.accept(generatorCoreStack(rung));
+                                // The generator multiblock cores: one entry per rung of each band's BCE fountain
+                                // ladder, each preset the same block_state way (the tower is built in world).
+                                for (GeneratorCoreTier rung : GeneratorCoreTier.rungsFor(CompressionBand.BAND_1)) {
+                                    output.accept(generatorCoreStack(ModItems.GENERATOR_CORE.get(), rung));
+                                }
+                                for (GeneratorCoreTier rung : GeneratorCoreTier.rungsFor(CompressionBand.BAND_2)) {
+                                    output.accept(generatorCoreStack(ModItems.GENERATOR_CORE_2.get(), rung));
                                 }
                             })
                             .build()
@@ -140,14 +151,14 @@ public class ModCreativeModeTab {
     }
 
     /**
-     * A tier-1 generator core preset to one rung of the BCE fountain ladder. All rungs share
-     * {@link ModItems#GENERATOR_CORE} and are differentiated through the {@code block_state} component like
-     * {@link #generatorStack}; the tower block reads it back on placement to decide rate and FE price.
+     * A generator core preset to one rung of a band's BCE fountain ladder. Each band's cores share one item and are
+     * differentiated through the {@code block_state} component like {@link #generatorStack}; the tower block reads the
+     * rung index back on placement to decide rate and FE price, and the block supplies its own band.
      */
-    private static ItemStack generatorCoreStack(GeneratorCoreTier rung) {
-        ItemStack stack = new ItemStack(ModItems.GENERATOR_CORE.get());
+    private static ItemStack generatorCoreStack(Item coreItem, GeneratorCoreTier rung) {
+        ItemStack stack = new ItemStack(coreItem);
         stack.set(DataComponents.BLOCK_STATE,
-                BlockItemStateProperties.EMPTY.with(GeneratorCoreBlock.RUNG, rung));
+                BlockItemStateProperties.EMPTY.with(GeneratorCoreBlock.RUNG, rung.index()));
         return stack;
     }
 }

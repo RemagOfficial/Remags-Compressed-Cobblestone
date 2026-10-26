@@ -5,6 +5,7 @@ import com.remag.rcc.block.entity.CompressionBlockEntity;
 import com.remag.rcc.block.entity.ModBlockEntities;
 import com.remag.rcc.client.CompressionCoreRenderer;
 import com.remag.rcc.client.CompressionCoreScreen;
+import com.remag.rcc.client.ClientTowerListTooltip;
 import com.remag.rcc.client.ClientTowerTooltip;
 import com.remag.rcc.item.ModItems;
 import com.remag.rcc.machine.BcePipeBlock;
@@ -13,6 +14,7 @@ import com.remag.rcc.menu.ModMenus;
 import com.remag.rcc.registry.CompressionConfig;
 import com.remag.rcc.registry.DisplayNames;
 import com.remag.rcc.registry.ModDataComponents;
+import com.remag.rcc.registry.TowerListTooltipComponent;
 import com.remag.rcc.registry.TowerTooltipComponent;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
@@ -78,6 +80,7 @@ public final class ClientEvents {
      */
     private static void onRegisterTooltipComponents(RegisterClientTooltipComponentFactoriesEvent event) {
         event.register(TowerTooltipComponent.class, ClientTowerTooltip::new);
+        event.register(TowerListTooltipComponent.class, ClientTowerListTooltip::new);
     }
 
     /** The base unit of the whole economy: one piece of vanilla cobblestone is worth exactly 1 BCE. */

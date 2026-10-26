@@ -1,6 +1,8 @@
 package com.remag.rcc.registry;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The progression <b>bands</b> - one row per tier of machinery the mod ships or plans to ship. This is the single
@@ -10,11 +12,11 @@ import java.math.BigInteger;
  * <p>A band is named for the compression tier its compressor tops out at: band {@code k} accepts whatever band
  * {@code k-1} produced ({@link #minInputTier()} is literally the previous row's {@link #maxOutputTier()}, the
  * handover rule the shipped machines already follow - {@link CompressionConfig#MANIPULATOR_MIN_IN} is 1000 because
- * band 0's ceiling is 1000) and outputs blocks up to {@link #maxOutputTier()}. Bands 0 and 1 are <b>shipped</b>;
- * rows 2..8 are the plan and exist here so the geometry, ceilings and scan radii can be generalised <em>before</em>
- * band 2 is written, not after.
+ * band 0's ceiling is 1000) and outputs blocks up to {@link #maxOutputTier()}. Bands 0 to 2 are <b>shipped</b>;
+ * rows 3..8 are the plan and exist here so the geometry, ceilings and scan radii can be generalised <em>before</em>
+ * those bands are written, not after.
  *
- * <p><b>Only bands 0-1 may be trusted as tuned.</b> The later rows carry placeholder numbers on purpose - the
+ * <p><b>Only bands 0-2 may be trusted as tuned.</b> The later rows carry placeholder numbers on purpose - the
  * per-band FE cost (D5), required port counts (D-ports) and rung ladders are open decisions in
  * {@code MASTER_PLAN.md} §9 - but the <em>geometry</em> rows are the agreed plan: compressor side {@code 2k+3},
  * decompressor side {@code 2k+1} (the family ends at band 3, D7), generator tower {@code (2k+1)} wide and
@@ -28,25 +30,39 @@ import java.math.BigInteger;
 public enum CompressionBand {
     /** Shipped. Single-block band: manual 3x3 crafting climb plus the Auto machines, ending at tier 1000. */
     BAND_0(BigInteger.TEN.pow(3), 0, 0, 0, 0, 0, 0, 0L),
-    /** Shipped. The three 5x5x5 / 3x3x3 / 3x3x4 multiblocks, ending at tier 10^12. */
-    BAND_1(BigInteger.TEN.pow(12), 2, 1, 1, 1, 2, 1, 1_000L),
-    /** Planned: 7x7x7 compressor, 5x5x5 decompressor (fast descent), 5x5x6 tower. */
-    BAND_2(BigInteger.TEN.pow(20), 3, 2, 2, 2, 3, 1, 2_000L),
+    /** Shipped. The three 5x5x5 / 3x3x3 / 3x3x4 multiblocks, ending at tier 10^15. */
+    BAND_1(BigInteger.TEN.pow(15), 2, 1, 1, 1, 2, 1, 1_000L),
+    // Every band's generator ladder carries the SAME number of cores - RUNGS_PER_BAND below - whatever the row spans,
+    // so the climb always has the same granularity per tier. The ceilings are therefore cut to fit: eight multiblock
+    // bands holding twelve evenly spaced steps between them only reach a googol at roughly a decade per step, which is
+    // what band 1's ceiling used to be (10^12) and is why it now reads 10^15. The last row breaks the pattern on
+    // purpose: its ceiling is two googols so the "half the band max" top rung - the rule every ladder obeys, and the
+    // one a generator array completes (rung share x tower count = whole block) - is exactly the googol block.
+    /** Shipped: 7x7x7 compressor, 5x5x5 decompressor (fast descent), 5x5x6 tower. */
+    BAND_2(BigInteger.TEN.pow(27), 3, 2, 2, 2, 3, 1, 2_000L),
     /** Planned: 9x9x9 compressor, 7x7x7 <em>instant</em> decompressor (the family's last), 7x7x8 tower. */
-    BAND_3(BigInteger.TEN.pow(28), 4, 3, 3, 3, 4, 2, 4_000L),
+    BAND_3(BigInteger.TEN.pow(39), 4, 3, 3, 3, 4, 2, 4_000L),
     /** Planned: from here on no new decompressor exists - band 3's covers every tier (D7). */
-    BAND_4(BigInteger.TEN.pow(38), 5, 0, 4, 4, 5, 2, 8_000L),
+    BAND_4(BigInteger.TEN.pow(51), 5, 0, 4, 4, 5, 2, 8_000L),
     /** Planned. */
-    BAND_5(BigInteger.TEN.pow(50), 6, 0, 5, 5, 6, 2, 16_000L),
+    BAND_5(BigInteger.TEN.pow(63), 6, 0, 5, 5, 6, 2, 16_000L),
     /** Planned. */
-    BAND_6(BigInteger.TEN.pow(64), 7, 0, 6, 6, 7, 3, 32_000L),
+    BAND_6(BigInteger.TEN.pow(75), 7, 0, 6, 6, 7, 3, 32_000L),
     /** Planned. */
-    BAND_7(BigInteger.TEN.pow(80), 8, 0, 7, 7, 8, 3, 64_000L),
-    /** Planned finale: a block whose compression tier is a googol. */
-    BAND_8(BigInteger.TEN.pow(100), 9, 0, 8, 8, 9, 4, 128_000L);
+    BAND_7(BigInteger.TEN.pow(87), 8, 0, 7, 7, 8, 3, 64_000L),
+    /** Planned finale: two googols, so the ladder's top rung - half of it - is exactly the tier-10^100 block. */
+    BAND_8(BigInteger.TWO.multiply(BigInteger.TEN.pow(100)), 9, 0, 8, 8, 9, 4, 128_000L);
 
     /** Highest band in the table - the one whose tier ceiling is the mod's stated goal. */
     public static final CompressionBand TOP = values()[values().length - 1];
+
+    /**
+     * How many generator cores <em>every</em> band's ladder ships with. One number for the whole table by design: the
+     * ladder is what a tier <em>feels</em> like, and equal counts keep that feel identical from band 1 to the googol -
+     * which is also why the ceilings are cut to fit it (see the note on the rows above) instead of the rung count
+     * being derived from however many decades a row happens to span.
+     */
+    public static final int RUNGS_PER_BAND = 13;
 
     private final BigInteger maxOutputTier;
     private final int compressorRadius;
@@ -200,8 +216,8 @@ public enum CompressionBand {
 
     /**
      * Tier the band's top generator rung mints toward: <b>half</b> this band's ceiling, the geometric-half convention
-     * the shipped ladders use (band 0's top rung is {@code 9^500}, half a tier-1000 block's BCE; band 1's is
-     * {@code 9^(5*10^11)}, half of {@code 9^(10^12)}).
+     * every ladder obeys (band 0's top rung is {@code 9^500}, half of a tier-1000 block's BCE; band 1's is
+     * {@code 9^(5*10^14)}, half of {@code 9^(10^15)}).
      *
      * <p>The other half is closed by the <em>array</em>, not by a bigger rung: one tower only ever mints
      * {@link #shareOf(BigInteger) share} of its rung, and {@link #arrayFullOutputTowers()} of them add up to one whole
@@ -210,6 +226,65 @@ public enum CompressionBand {
      */
     public BigInteger rungEndExponent() {
         return this.maxOutputTier.shiftRight(1);
+    }
+
+    /**
+     * This band's generator <em>rung ladder</em>, derived entirely from the two endpoints above so a new band costs no
+     * new code: the rung start, {@link #RUNGS_PER_BAND} - 2 evenly spaced steps in between, then the rung end (the
+     * geometric-half top). <b>Every band's ladder has the same length</b> - equal cores is what makes one tier feel
+     * like the next - so the steps are measured in log space over "however many decades this row happens to span"
+     * rather than fixed at one decade apiece. The shipped bands span roughly a decade per rung, which lands them back
+     * on clean powers of ten: band 1 runs {@code 1000, 10^4, 10^5, .. 10^14, 5*10^14} and band 2 mirrors the shape at
+     * {@code 10^15 .. 10^26, 5*10^26}. Exponents are rounded to whole compression tiers, because a milestone a player
+     * can never hold in their hands cannot gate a recipe; the guard below makes sure that rounding can never collapse
+     * two rungs onto the same tier. A single-block band ({@code compressorRadius == 0}) has no tower and so no rungs -
+     * {@link CompressionBand#BAND_0} returns empty here, exactly as it does for every other structure figure.
+     */
+    public List<BigInteger> rungExponents() {
+        if (!this.hasStructure()) {
+            return List.of();
+        }
+        BigInteger start = rungStartExponent();
+        BigInteger end = rungEndExponent();
+        int gaps = RUNGS_PER_BAND - 1; // the spaces between rungs, one fewer than the rungs themselves
+        double startLog = log10Value(start);
+        double span = log10Value(end) - startLog;
+        List<BigInteger> rungs = new ArrayList<>(RUNGS_PER_BAND);
+        rungs.add(start);
+        // Evenly spaced in log10 space, rounded to whole tiers and forced strictly upward, so a rung whose rounded
+        // milestone would land on its neighbour's still asks for something the player has to climb past.
+        for (int i = 1; i < gaps; i++) {
+            int exponent = (int) Math.round(startLog + span * i / gaps);
+            BigInteger rung = BigInteger.TEN.pow(Math.max(exponent, 1));
+            while (rung.compareTo(rungs.get(rungs.size() - 1)) <= 0) {
+                rung = rung.multiply(BigInteger.TEN);
+            }
+            if (rung.compareTo(end) >= 0) {
+                break; // a bumped rung overtook the top: better a short ladder than two rungs on one milestone
+            }
+            rungs.add(rung);
+        }
+        rungs.add(end); // the geometric-half top rung
+        return rungs;
+    }
+
+    /** log10 of a band tier, which is always a small power of ten (or half of one) so a {@code double} is exact enough. */
+    private static double log10Value(BigInteger value) {
+        return Math.log10(value.doubleValue());
+    }
+
+    /**
+     * The rung count a {@code rung} block-state property has to allow - one core class serves every band, but its state
+     * cannot be band-specific, so it is sized from the longest ladder in the table. That is {@link #RUNGS_PER_BAND}
+     * for any band wide enough to place all its steps on their own milestone; a narrower row can lose one rung to the
+     * rounding guard in {@link #rungExponents()}, which is why this scans rather than returning the constant.
+     */
+    public static int maxRungCount() {
+        int most = 0;
+        for (CompressionBand band : values()) {
+            most = Math.max(most, band.rungExponents().size());
+        }
+        return most;
     }
 
     // --- Generator array (D23) -----------------------------------------------------------------

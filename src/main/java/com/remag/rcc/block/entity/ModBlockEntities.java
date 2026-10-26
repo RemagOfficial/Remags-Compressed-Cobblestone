@@ -35,12 +35,13 @@ public final class ModBlockEntities {
     public static final Supplier<BlockEntityType<CompressionCoreBlockEntity>> COMPRESSION_CORE =
             BLOCK_ENTITIES.register("compression_core",
                     () -> BlockEntityType.Builder.of(CompressionCoreBlockEntity::new,
-                            ModBlocks.CORE.get()).build(null));
+                            ModBlocks.CORE.get(), ModBlocks.COMPRESSION_CORE_2.get()).build(null));
 
     public static final Supplier<BlockEntityType<DecompressorCoreBlockEntity>> COMPRESSION_DECOMPRESSOR_CORE =
             BLOCK_ENTITIES.register("compression_decompressor_core",
                     () -> BlockEntityType.Builder.of(DecompressorCoreBlockEntity::new,
-                            ModBlocks.COMPRESSION_DECOMPRESSOR_CORE.get()).build(null));
+                            ModBlocks.COMPRESSION_DECOMPRESSOR_CORE.get(),
+                            ModBlocks.COMPRESSION_DECOMPRESSOR_CORE_2.get()).build(null));
 
     public static final Supplier<BlockEntityType<CompressionAutoBlockEntity>> COMPRESSION_AUTO =
             BLOCK_ENTITIES.register("compression_auto",
@@ -57,12 +58,13 @@ public final class ModBlockEntities {
                     () -> BlockEntityType.Builder.of(BcePipeBlockEntity::new,
                             ModBlocks.BCE_PIPE.get()).build(null));
 
-    // One type serves both tank tiers: the capacity lives on the block, so the entity needs no subclass and the
-    // BCE capability registration below automatically covers the tier-two tank as well.
+    // One type serves every tank tier: the capacity lives on the block, so the entity needs no subclass and the
+    // BCE capability registration below automatically covers the tier-two and tier-three tanks as well.
     public static final Supplier<BlockEntityType<BceStorageBlockEntity>> BCE_STORAGE =
             BLOCK_ENTITIES.register("bce_storage",
                     () -> BlockEntityType.Builder.of(BceStorageBlockEntity::new,
-                            ModBlocks.BCE_STORAGE.get(), ModBlocks.BCE_STORAGE_2.get()).build(null));
+                            ModBlocks.BCE_STORAGE.get(), ModBlocks.BCE_STORAGE_2.get(),
+                            ModBlocks.BCE_STORAGE_3.get()).build(null));
 
     public static final Supplier<BlockEntityType<CobblestoneGeneratorBlockEntity>> COBBLESTONE_GENERATOR =
             BLOCK_ENTITIES.register("cobblestone_generator",
@@ -72,7 +74,7 @@ public final class ModBlockEntities {
     public static final Supplier<BlockEntityType<GeneratorCoreBlockEntity>> GENERATOR_CORE =
             BLOCK_ENTITIES.register("generator_core",
                     () -> BlockEntityType.Builder.of(GeneratorCoreBlockEntity::new,
-                            ModBlocks.GENERATOR_CORE.get()).build(null));
+                            ModBlocks.GENERATOR_CORE.get(), ModBlocks.GENERATOR_CORE_2.get()).build(null));
 
     public static void register(IEventBus eventBus) {
         BLOCK_ENTITIES.register(eventBus);

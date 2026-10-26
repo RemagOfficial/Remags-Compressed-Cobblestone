@@ -4,24 +4,29 @@ import com.remag.rcc.registry.BceNotation;
 import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.CompressionConfig;
 import com.remag.rcc.registry.DisplayNames;
-import net.minecraft.util.StringRepresentable;
-import org.jetbrains.annotations.Nullable;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * One rung of the <em>tier-1</em> generator ladder - the block-state value that decides what a
- * {@link GeneratorCoreBlockEntity}'s 3x3x4 multiblock mints and what it costs. The tier-0 ladder
- * ({@link GeneratorTier}) tops out at {@code 9^500} BCE/sec - half a tier-1000 block's BCE on the log scale, i.e.
- * the geometric half of the single-block band's ceiling. This ladder takes that handover literally: it starts at
- * the full tier-0 max ({@code 9^1000} BCE/sec, one tier-1000 block per second) and steps in powers of ten up to
- * the geometric half of the tier-1 max block ({@code 9^(5*10^11)} BCE/sec = half of {@code 9^(10^12)} on the log
- * scale, the same {@code sqrt}-of-the-band convention rung 500 uses).
+ * One rung of a generation manipulator's ladder - the {@code (band, index)} pair that decides what a
+ * {@link GeneratorCoreBlockEntity}'s tower mints and what it costs. It used to be a fixed enum of ten band-1
+ * constants; it is now resolved from a {@link CompressionBand} row and the rung's position within that row's
+ * {@link CompressionBand#rungExponents() ladder}, so a new band's ladder is drawn from the table with no new code
+ * (exactly what {@link GeneratorCoreBlock#RUNG} storing a bounded {@code int} index exists to allow). The band-0
+ * single-block ladder stays on {@link GeneratorTier}; this class is the multiblock family, which starts at band 1.
+ *
+ * <p>Every band's ladder holds the same number of rungs ({@link CompressionBand#RUNGS_PER_BAND}), so climbing one tier
+ * feels like climbing the next: the rungs are the band's start - the previous band's ceiling - then evenly spaced steps
+ * in log space, topped by the geometric half of the band's own ceiling. Those endpoints come from
+ * {@link CompressionBand#rungStartExponent()} / {@link CompressionBand#rungEndExponent()}, so band 1 runs {@code
+ * 1000 .. 5*10^14} and band 2 inherits {@code 10^15 .. 5*10^26} without this class changing.
  *
  * <p><b>A rung is a tower's share, not a bus's output.</b> What one tower of this band deposits is
  * {@link #shareExponent()} - the rung exponent divided by {@code 2^band} ({@link CompressionBand#shareOf}) - so a
  * band-1 tower mints half of what its rung names and {@link CompressionBand#arrayFullOutputTowers() four} of them on
- * one BCE bus mint a whole tier-{@code 10^12} block per second. That is the {@code MASTER_PLAN.md} D23 array rule, and
+ * one BCE bus mint a whole tier-{@code 10^15} block per second. That is the {@code MASTER_PLAN.md} D23 array rule, and
  * it exists because summing <em>masses</em> is unrepresentable at these magnitudes (see
  * {@link CompressionConfig#log10add}) while summing {@link BigInteger} exponents is exact. {@link #rateLog10PerSec()},
  * {@link #rateTower()} and {@link #describe()} all report the share, so the figure the player is shown is the figure
@@ -29,81 +34,113 @@ import java.math.BigInteger;
  * recipe and the advancement - which is why climbing is still about reaching blocks, not about bigger mint numbers.
  *
  * <p>Every rung is a pure BCE producer - these rates have long since stopped being countable in items - so unlike
- * {@link GeneratorTier} there is no item/BCE mode split. What <em>is</em> new is an escalating FE bill: a tier-1
- * generator burns FE while minting, doubling with every rung
- * ({@link CompressionConfig#GEN1_BASE_ENERGY_PER_TICK} {@code << ordinal}), making power infrastructure the gate
- * that pipe logistics were on the tier-0 ladder. The FE buffer is sized per rung as one second's draw
- * ({@link #energyCapacity()}), so supply infrastructure has to grow with the generator, not merely exist. Because FE
- * is an {@code int} currency, both figures saturate at {@link Integer#MAX_VALUE} rather than wrapping - a later band
- * that wants to bill more than that is meant to add POWER ports, not bigger numbers.
+ * {@link GeneratorTier} there is no item/BCE mode split. What <em>is</em> new is an escalating FE bill: a generator
+ * burns FE while minting, doubling with every rung ({@link CompressionBand#baseEnergyPerTick()} {@code << index}),
+ * making power infrastructure the gate that pipe logistics were on the tier-0 ladder. The FE buffer is sized per rung
+ * as one second's draw ({@link #energyCapacity()}), so supply infrastructure has to grow with the generator, not
+ * merely exist. Because FE is an {@code int} currency, both figures saturate at {@link Integer#MAX_VALUE} rather than
+ * wrapping - a later band that wants to bill more than that is meant to add POWER ports, not bigger numbers.
  *
- * <p>The ladder's endpoints are read from {@link CompressionBand#BAND_1} rather than hardcoded, so a new band's
- * rung list starts and stops where the band table says it must.
- *
- * <p>Serialised names carry the exponent in short form ({@code t1_p1000} for the {@code 1000} start,
- * {@code t1_10k} .. {@code t1_100b} for the powers of ten, {@code t1_half_band} for the top) so block-state JSON
- * stays readable; the creative label uses {@link #displaySuffix()}.
+ * <p>Serialised names carry the handover tier for the first rung ({@code t1_p1000} for the {@code 1000} start) and a
+ * fixed {@code t1_half_band} for the top, but the rungs in between are keyed by <em>position</em> ({@code t1_2} ..
+ * {@code t1_12}): their tiers are rounded to whole powers of ten, so a descriptive name could collide with a neighbour
+ * on a band whose steps are tighter than a decade. The {@code t<band>} tag keeps a later band's rungs from colliding
+ * with band 1's.
  */
-public enum GeneratorCoreTier implements StringRepresentable {
-    T1_P1000(CompressionBand.BAND_1.rungStartExponent(), "t1_p1000"),
-    T1_10K(BigInteger.TEN.pow(4), "t1_10k"),
-    T1_100K(BigInteger.TEN.pow(5), "t1_100k"),
-    T1_1M(BigInteger.TEN.pow(6), "t1_1m"),
-    T1_10M(BigInteger.TEN.pow(7), "t1_10m"),
-    T1_100M(BigInteger.TEN.pow(8), "t1_100m"),
-    T1_1B(BigInteger.TEN.pow(9), "t1_1b"),
-    T1_10B(BigInteger.TEN.pow(10), "t1_10b"),
-    T1_100B(BigInteger.TEN.pow(11), "t1_100b"),
-    T1_HALF_BAND(CompressionBand.BAND_1.rungEndExponent(), "t1_half_band");
-
-    /**
-     * The band this whole ladder belongs to - every constant above is a band-1 rung. A band-2 ladder passes its own
-     * row here and inherits the share divisor, the array size and the ceilings from the table. Read from method bodies
-     * only: enum constants are constructed before this field is assigned.
-     */
-    private static final CompressionBand BAND = CompressionBand.BAND_1;
-
-    /**
-     * The {@code 9^n} <em>milestone</em> exponent of this rung - the tier whose block's BCE equals the rung's nominal
-     * per-second figure, and the block its upgrade recipe asks for. A {@link BigInteger}, not a {@code long}: the
-     * shipped band's top rung ({@code 5*10^11}) fits a long easily, but band 2's ladder ends at {@code 5*10^19},
-     * past {@link Long#MAX_VALUE}, so the rung type must not be what caps a band.
-     */
+public final class GeneratorCoreTier {
+    private final CompressionBand band;
+    private final int index;
     private final BigInteger tierExponent;
     private final String name;
 
-    GeneratorCoreTier(BigInteger tierExponent, String name) {
-        this.tierExponent = tierExponent;
-        this.name = name;
+    /**
+     * Resolve rung {@code index} of {@code band}'s ladder. The index is clamped into the band's own rung list so a
+     * block state read from a foreign (higher) index can never run off the end of a narrower band's ladder.
+     */
+    public GeneratorCoreTier(CompressionBand band, int index) {
+        List<BigInteger> rungs = band.rungExponents();
+        int clamped = Math.min(Math.max(index, 0), Math.max(0, rungs.size() - 1));
+        this.band = band;
+        this.index = clamped;
+        this.tierExponent = rungs.isEmpty() ? BigInteger.ZERO : rungs.get(clamped);
+        this.name = computeName(band, clamped, this.tierExponent, rungs.size());
     }
 
-    @Override
+    /** Every rung of {@code band}'s ladder, in climbing order - what the creative tab and recipe line iterate. */
+    public static List<GeneratorCoreTier> rungsFor(CompressionBand band) {
+        List<GeneratorCoreTier> rungs = new ArrayList<>();
+        List<BigInteger> exponents = band.rungExponents();
+        for (int i = 0; i < exponents.size(); i++) {
+            rungs.add(new GeneratorCoreTier(band, i));
+        }
+        return rungs;
+    }
+
+    /**
+     * Serial form of one rung. The band's handover rung keeps its readable tier ({@code p1000}), the top is always
+     * {@code half_band}, and everything in between is numbered by position - the rungs between are rounded powers of
+     * ten whose short names can collide on a tight band, while the index cannot.
+     */
+    private static String computeName(CompressionBand band, int index, BigInteger exponent, int size) {
+        String bandTag = "t" + band.index();
+        if (index == 0) {
+            return bandTag + "_p" + shortName(exponent);
+        }
+        if (index == size - 1) {
+            return bandTag + "_half_band";
+        }
+        return bandTag + "_" + (index + 1);
+    }
+
+    /**
+     * Short readable form of a power-of-ten tier ({@code 1000}, {@code 10k}, {@code 100m}, {@code 1t}, ..). Only the
+     * ladder's first rung still needs it - that is the previous band's ceiling, always a clean power of ten.
+     */
+    private static String shortName(BigInteger value) {
+        int e = value.toString().length() - 1; // value is 10^e, whose decimal form has e + 1 digits
+        if (e <= 3) {
+            return BigInteger.TEN.pow(e).toString();
+        }
+        String[] suffixes = {"", "k", "m", "b", "t", "q", "x"}; // all lowercase - these feed resource paths
+        int group = e / 3;
+        int within = e % 3;
+        String mantissa = within == 0 ? "1" : BigInteger.TEN.pow(within).toString();
+        String suffix = group < suffixes.length ? suffixes[group] : "e" + (3 * group);
+        return mantissa + suffix;
+    }
+
+    /**
+     * The rung's short serial name ({@code t1_p1000} .. {@code t1_half_band}), used for recipe / advancement ids and
+     * lang keys. Not a block-state value any more - {@link GeneratorCoreBlock#RUNG} is now a plain index - so it is
+     * purely a readable, stable handle for one position in one band's ladder.
+     */
     public String getSerializedName() {
         return this.name;
     }
 
-    /**
-     * This rung's <em>milestone</em> exponent: the compression tier whose block is worth the rung's nominal
-     * {@code 9^n}/sec, and therefore the block the upgrade recipe and the advancement ask for. Not what a lone tower
-     * deposits - see {@link #shareExponent()}, which is this figure divided by the band's array divisor.
-     */
+    /** This rung's <em>milestone</em> exponent: the compression tier whose block gates the upgrade recipe. */
     public BigInteger tierExponent() {
         return this.tierExponent;
     }
 
     /** The band this rung ladder belongs to, so the bus can clamp an array at the right ceiling. */
     public CompressionBand band() {
-        return BAND;
+        return this.band;
+    }
+
+    /** This rung's zero-based position within its band's ladder (the value carried in {@code RUNG}). */
+    public int index() {
+        return this.index;
     }
 
     /**
      * The exponent this tower contributes to its bus: {@link #tierExponent()} divided by {@code 2^band}
      * ({@link CompressionBand#shareOf}). Band 1 halves every rung, so four rung-X towers are needed for the
-     * {@code 9^(10^12)}/sec a whole tier-1 block per second means; the sum happens in
+     * {@code 9^(2X)}/sec a whole tier-{@code 2X} block per second means; the sum happens in
      * {@link com.remag.rcc.energy.BceNetwork}.
      */
     public BigInteger shareExponent() {
-        return BAND.shareOf(this.tierExponent);
+        return this.band.shareOf(this.tierExponent);
     }
 
     /**
@@ -121,8 +158,8 @@ public enum GeneratorCoreTier implements StringRepresentable {
      * int} would wrap to a <em>negative</em> bill and every consumer below would read a negative cost as free power.
      */
     private long rawEnergyPerTick() {
-        long base = CompressionConfig.GEN1_BASE_ENERGY_PER_TICK;
-        int shifts = ordinal();
+        long base = this.band.baseEnergyPerTick();
+        int shifts = this.index;
         if (shifts >= Long.SIZE - 1 || base > (Long.MAX_VALUE >> shifts)) {
             return Long.MAX_VALUE;
         }
@@ -152,26 +189,26 @@ public enum GeneratorCoreTier implements StringRepresentable {
 
     /**
      * This tower's {@code 9^n} share of the band as a drawable power tower. The exponent is a {@link BigInteger} that
-     * reaches {@code 10^12} on this ladder and {@code 10^20} on the next, so it is written as a stack ({@code 9^(10¹²)})
+     * reaches {@code 10^15} on band 1 and {@code 10^27} on the next, so it is written as a stack ({@code 9^(10¹⁵)})
      * rather than as digits - {@link com.remag.rcc.item.GeneratorCoreItem} draws it, {@link #describe()} flattens it.
      */
     public BceNotation.Tower rateTower() {
         return BceNotation.power("9", shareExponent());
     }
 
-    /** The creative-label suffix: {@code "I"} .. {@code "X"}, so the ten rungs read as one ordered line. */
+    /** The creative-label suffix: {@code "I"} .. the rung's roman number, so the ladder reads as one ordered line. */
     public String displaySuffix() {
-        return DisplayNames.roman(ordinal() + 1);
+        return DisplayNames.roman(this.index + 1);
     }
 
-    /** Lookup by the block-state serial name (reading a placed stack's {@code block_state} component). */
-    @Nullable
-    public static GeneratorCoreTier byName(String name) {
-        for (GeneratorCoreTier tier : values()) {
-            if (tier.name.equals(name)) {
-                return tier;
-            }
-        }
-        return null;
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof GeneratorCoreTier tier
+                && this.band == tier.band && this.index == tier.index;
+    }
+
+    @Override
+    public int hashCode() {
+        return 31 * this.band.hashCode() + this.index;
     }
 }

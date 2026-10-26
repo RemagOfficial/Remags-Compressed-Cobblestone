@@ -5,6 +5,7 @@ import com.remag.rcc.block.entity.ModBlockEntities;
 import com.remag.rcc.energy.IBceStorage;
 import com.remag.rcc.item.ModItems;
 import com.remag.rcc.menu.CompressionCoreMenu;
+import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.CompressionConfig;
 import com.remag.rcc.registry.ModDataComponents;
 import net.minecraft.core.BlockPos;
@@ -109,7 +110,7 @@ public class DecompressorCoreBlockEntity extends BlockEntity
     /**
      * The BCE buffer as a sided capability view offered on the item ports: extractable so the released mass can be
      * piped out to BCE-powered machines, and receivable so mass can be fed back in - the same two-way pool the
-     * single-block decompressor exposes. {@link #canReceive()} accepting a write that would overflow is refused, just
+     * single-block decompressor exposes. {@code canReceive()} accepting a write that would overflow is refused, just
      * as the standalone producer view does.
      */
     private final IBceStorage bceView = new IBceStorage() {
@@ -169,6 +170,18 @@ public class DecompressorCoreBlockEntity extends BlockEntity
 
     public DecompressorCoreBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.COMPRESSION_DECOMPRESSOR_CORE.get(), pos, state);
+    }
+
+    /** The progression band this core's block belongs to; drives the shell radius, port floor and buffer ceiling. */
+    public CompressionBand band() {
+        return getBlockState().getBlock() instanceof DecompressorCoreBlock core
+                ? core.band() : CompressionBand.BAND_1;
+    }
+
+    /** Sweep the capability cache across this band's shell box, not the band-1 default the interface carries. */
+    @Override
+    public int portShellExtent() {
+        return band().shellExtent();
     }
 
     /**
@@ -433,7 +446,7 @@ public class DecompressorCoreBlockEntity extends BlockEntity
         if (level == null || level.isClientSide()) {
             return;
         }
-        int r = CompressionConfig.DECOMP_REGION_RADIUS;
+        int r = band().decompressorRadius();
         int power = 0;
         int itemIn = 0;
         int itemOut = 0;
@@ -469,7 +482,7 @@ public class DecompressorCoreBlockEntity extends BlockEntity
                             ok = false;
                             break outer;
                         }
-                    } else {
+                    } else if (boundary == 1) {
                         // Face centres: glass, a port, or the interface.
                         if (s.is(ModBlocks.GLASS.get())) {
                             // fine, a face panel
@@ -485,12 +498,16 @@ public class DecompressorCoreBlockEntity extends BlockEntity
                             ok = false;
                             break outer;
                         }
+                    } else if (!s.isAir()) {
+                        // Interior (no boundary coordinate): hollow air, as in the compressor - band 1 has none.
+                        ok = false;
+                        break outer;
                     }
                 }
             }
         }
         boolean result = ok
-                && power >= CompressionConfig.MIN_POWER_PORTS
+                && power >= band().minPowerPorts()
                 && itemIn >= CompressionConfig.MIN_ITEM_IN_PORTS
                 && itemOut >= CompressionConfig.MIN_ITEM_OUT_PORTS
                 && interfaces >= CompressionConfig.MIN_INTERFACES

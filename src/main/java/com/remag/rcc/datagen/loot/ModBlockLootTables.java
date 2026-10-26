@@ -27,9 +27,10 @@ public class ModBlockLootTables extends BlockLootSubProvider {
         for (Block structural : new Block[]{
                 ModBlocks.FRAME.get(), ModBlocks.GLASS.get(), ModBlocks.INTERFACE.get(),
                 ModBlocks.PORT.get(), ModBlocks.CORE.get(), ModBlocks.COMPRESSION_DECOMPRESSOR_CORE.get(),
+                ModBlocks.COMPRESSION_CORE_2.get(), ModBlocks.COMPRESSION_DECOMPRESSOR_CORE_2.get(),
                 ModBlocks.COMPRESSION_AUTO.get(),
                 ModBlocks.COMPRESSION_AUTO_DECOMPRESSOR.get(), ModBlocks.BCE_STORAGE.get(),
-                ModBlocks.BCE_STORAGE_2.get()}) {
+                ModBlocks.BCE_STORAGE_2.get(), ModBlocks.BCE_STORAGE_3.get()}) {
             this.add(structural, this.createSingleItemTable(structural.asItem()));
         }
 
@@ -47,6 +48,10 @@ public class ModBlockLootTables extends BlockLootSubProvider {
                         .apply(CopyComponentsFunction.copyComponents(CopyComponentsFunction.Source.BLOCK_ENTITY)));
         this.add(ModBlocks.GENERATOR_CORE.get(),
                 this.createSingleItemTable(ModBlocks.GENERATOR_CORE.get().asItem())
+                        .apply(CopyComponentsFunction.copyComponents(CopyComponentsFunction.Source.BLOCK_ENTITY)));
+        // The band-2 generator core rides the same rung-carrying route as band 1 (its block supplies the band).
+        this.add(ModBlocks.GENERATOR_CORE_2.get(),
+                this.createSingleItemTable(ModBlocks.GENERATOR_CORE_2.get().asItem())
                         .apply(CopyComponentsFunction.copyComponents(CopyComponentsFunction.Source.BLOCK_ENTITY)));
     }
 

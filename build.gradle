@@ -157,6 +157,13 @@ dependencies {
     localRuntime "mekanism:Mekanism:1.21.1-10.7.19.85"
     localRuntime "curse.maven:storage-drawers-223852:6967730"
 
+    // Patchouli guide book (Phase A-2), loaded in runClient via localRuntime so the book and its in-world
+    // multiblock previews can be checked in game; NEVER published as an RCC dependency (the shipped mod stays
+    // dependency-free - the book JSON is inert without Patchouli, and neoforge.mods.toml declares it optional).
+    // The rcc_manual book is emitted as plain JSON by the datagen provider, so no compileOnly :api is needed -
+    // the provider never imports vazkii.patchouli.api.*. Pinned to the released 1.21.1 NEOFORGE build (94 is SNAPSHOT).
+    localRuntime "vazkii.patchouli:Patchouli:1.21.1-93-NEOFORGE"
+
     // Example mod dependency using a mod jar from ./libs with a flat dir repository
     // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
     // The group id is ignored when searching -- in this case, it is "blank"

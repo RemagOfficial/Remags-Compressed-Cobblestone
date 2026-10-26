@@ -1,6 +1,5 @@
 package com.remag.rcc.machine;
 
-import com.remag.rcc.block.ModBlocks;
 import com.remag.rcc.energy.IBceStorage;
 import com.remag.rcc.registry.CompressionBand;
 import net.minecraft.core.BlockPos;
@@ -123,8 +122,8 @@ public interface IMultiblockPortHost {
                 continue;
             }
             BlockState s = level.getBlockState(p);
-            if ((s.is(ModBlocks.CORE.get()) || s.is(ModBlocks.COMPRESSION_DECOMPRESSOR_CORE.get())
-                    || s.is(ModBlocks.GENERATOR_CORE.get()))
+            if ((s.getBlock() instanceof CompressionCoreBlock || s.getBlock() instanceof DecompressorCoreBlock
+                    || s.getBlock() instanceof GeneratorCoreBlock)
                     && level.getBlockEntity(p) instanceof IMultiblockPortHost host) {
                 return host;
             }
@@ -153,7 +152,7 @@ public interface IMultiblockPortHost {
             if (!level.isLoaded(p)) {
                 continue;
             }
-            if (level.getBlockState(p).is(ModBlocks.GENERATOR_CORE.get())
+            if (level.getBlockState(p).getBlock() instanceof GeneratorCoreBlock
                     && level.getBlockEntity(p) instanceof GeneratorCoreBlockEntity core
                     && core.claimsPowerPort(from)) {
                 hosts.add(core);

@@ -4,17 +4,17 @@ import com.remag.rcc.registry.CompressionConfig;
 import net.minecraft.util.StringRepresentable;
 
 /**
- * Throughput grade of a {@link BcePipeBlock}. Two tiers, selected by the {@code tier} block state, one per machine band.
+ * Throughput grade of a {@link BcePipeBlock}. Three tiers, selected by the {@code tier} block state, one per machine band.
  *
  * <p>Each tier moves up to an <strong>absolute per-transfer ceiling</strong> of BCE, taken from
  * {@link CompressionConfig#BCE_PIPE_MAX_TRANSFER_LOG} by ordinal. A pipe never moves more than that ceiling and never
  * more than its source holds, whichever is smaller.
  *
  * <ul>
- *   <li>{@link #TIER_1} &mdash; the Auto-Compressor band: ceiling = one tier-{@code 1000} block's BCE (up to
+ *   <li>{@link #TIER_1} &mdash; the Auto-Compressor band (band 0): ceiling = one tier-{@code 1000} block's BCE (up to
  *       {@code 1000x} compressed cobblestone);</li>
- *   <li>{@link #TIER_2} &mdash; the Manipulator band: ceiling = one tier-{@code 1e12} block's BCE (up to about
- *       {@code 1 trillion x} compressed cobblestone).</li>
+ *   <li>{@link #TIER_2} &mdash; the band-1 Manipulator: ceiling = one tier-{@code 1e15} block's BCE;</li>
+ *   <li>{@link #TIER_3} &mdash; the band-2 Manipulator: ceiling = one tier-{@code 1e27} block's BCE.</li>
  * </ul>
  *
  * <p>An absolute ceiling (rather than a fraction of the source) is what lets a huge source feed a much smaller sink:
@@ -24,7 +24,8 @@ import net.minecraft.util.StringRepresentable;
  */
 public enum BcePipeTier implements StringRepresentable {
     TIER_1("one"),
-    TIER_2("two");
+    TIER_2("two"),
+    TIER_3("three");
 
     private final String name;
 

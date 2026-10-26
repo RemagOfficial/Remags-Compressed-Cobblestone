@@ -15,7 +15,7 @@ public final class CompressionConfig {
     // --- Tier bounds ---------------------------------------------------------------------------
     // These are <em>aliases onto the band table</em> ({@link CompressionBand}), not the other way round: one row per
     // band is the single source of truth, and the shipped names stay so the machines read the same numbers they always
-    // did. Band 0 tops out at {@code 10^3 = 1000} and band 1 at {@code 10^12}, exactly as before.
+    // did. Band 0 tops out at {@code 10^3 = 1000} and band 1 at {@code 10^15}, one rung ladder per band.
     /** Highest tier the vanilla 3x3 compress chain can produce; also the creative-tab listing ceiling. */
     public static final BigInteger MANUAL_MAX_LEVEL = CompressionBand.BAND_0.maxOutputTier();
     /** Lowest seed tier the Compression Manipulator will accept. */
@@ -123,7 +123,7 @@ public final class CompressionConfig {
     /**
      * The old hand-picked "effectively unlimited" sink ceiling, kept as a <em>floor</em>. {@link
      * CompressionBand#sinkCeilingLog()} takes the larger of this figure and its own band's biggest push, so no
-     * shipped band's pool gets tighter than it is today (band 1's whole ceiling block is only {@code 9.5*10^11} log
+     * shipped band's pool gets tighter than it is today (band 1's whole ceiling block is only {@code 9.5*10^14} log
      * mass, far under this) while every band from 2 upward is governed by its own magnitude instead of a constant
      * that would quietly start refusing legitimate feeds.
      */
@@ -133,7 +133,19 @@ public final class CompressionConfig {
     public static final int REGION_RADIUS = CompressionBand.BAND_1.compressorRadius(); // 5x5x5 cube centred on the core
     public static final int ENERGY_CAPACITY = 1_000_000;
     public static final int ENERGY_PER_CRAFT = 250_000;
-    public static final int TICKS_PER_CRAFT = 240; // 120s per cycle (progress bar + drain rate derive from this)
+    /**
+     * Craft time for the <b>first</b> multiblock tier (band 1), in ticks: the seed every higher band scales from via
+     * {@link #craftTicks(CompressionBand)}. Change <em>this one figure</em> to speed up or slow down the whole ladder -
+     * the higher bands are pure multiplication, not hand-authored per-tier literals. {@code 240 = 12s} is the current
+     * test value (the progress bar and the FE drain rate both derive from it).
+     */
+    public static final int TICKS_PER_CRAFT = 240;
+    /**
+     * How much slower each band above tier 1 crafts, as a multiplier on the tier-1 {@link #TICKS_PER_CRAFT}: band 1 is
+     * the base, band 2 is {@code 1.5x}, band 3 {@code 1.5^2}, and so on, so a higher tier costs visibly more time per
+     * craft without a per-band table. Applied in {@link #craftTicks(CompressionBand)}.
+     */
+    public static final double CRAFT_SLOWDOWN_PER_BAND = 1.5D;
     /**
      * POWER ports the Manipulator's shell needs at minimum, from its band row. Band-scaled port counts are how a
      * later band raises its FE budget without one enormous number (see {@link CompressionBand#minPowerPorts()} and
@@ -150,8 +162,8 @@ public final class CompressionConfig {
      * band instead of being a hand-picked literal. {@link CompressionBand#sinkCeilingLog()} grows this with the band,
      * floored at {@link #UNLIMITED_SINK_FLOOR_LOG}, which lands on exactly the old "effectively unlimited"
      * {@code 1e18} for the shipped band 1 (so today's behaviour is untouched) and lets a band-2 pool scale to its own
-     * biggest push instead of a constant that would start <em>refusing legitimate feeds</em> - a tier-{@code 10^20}
-     * block is worth {@code 9.5*10^19} log10 mass, well past that old figure. See {@link #withTransferHeadroom} for
+     * biggest push instead of a constant that would start <em>refusing legitimate feeds</em> - a tier-{@code 10^27}
+     * block is worth {@code 9.5*10^26} log10 mass, well past that old figure. See {@link #withTransferHeadroom} for
      * the margin that keeps the last slice of a fill expressible.
      */
     public static final double MANIPULATOR_BCE_CAPACITY_LOG = CompressionBand.BAND_1.sinkCeilingLog();
@@ -234,8 +246,9 @@ public final class CompressionConfig {
     /**
      * Throughput of each BCE pipe tier as an <em>absolute per-transfer ceiling</em>, in log10 BCE, indexed by tier
      * ordinal. A pipe moves at most this much and at most whatever its source holds, whichever is smaller - so the
-     * two tiers map onto the two machine bands: tier I tops out at one tier-{@link #MANUAL_MAX_LEVEL} block's BCE
-     * (the Auto-Compressor band), tier II at one tier-{@link #MANIPULATOR_MAX_OUT} block's BCE (the Manipulator band).
+     * three tiers map onto the three shipped machine bands: tier I tops out at one tier-{@link #MANUAL_MAX_LEVEL}
+     * block's BCE (band 0, the Auto-Compressor band), tier II at one band-1 block's BCE, tier III at one band-2 block's
+     * BCE. Each value is {@code CompressionBand.BAND_k.pipeCeilingLog()}, so adding a band tier is one array entry.
      *
      * <p>An absolute ceiling replaced the old fraction-of-source rate because the bands are now fixed: tying a tier to
      * its machine's biggest block makes the pipe's job legible ("drain one tier-1000 block per transfer") and, unlike
@@ -243,17 +256,25 @@ public final class CompressionConfig {
      * to meet. Values derive straight from the band constants so they stay tunable in one place.
      */
     public static final double[] BCE_PIPE_MAX_TRANSFER_LOG =
-            {CompressionBand.BAND_0.pipeCeilingLog(), CompressionBand.BAND_1.pipeCeilingLog()};
+            {CompressionBand.BAND_0.pipeCeilingLog(), CompressionBand.BAND_1.pipeCeilingLog(),
+                    CompressionBand.BAND_2.pipeCeilingLog()};
     /** Capacity of the single-block BCE storage tank, in log10 BCE: one tier-{@code 1000} block's full yield. */
     public static final double BCE_STORAGE_CAPACITY_LOG = CompressionBand.BAND_0.storageCapacityLog();
     /**
-     * Capacity of the <em>tier-two</em> tank, in log10 BCE: one tier-{@link #MANIPULATOR_MAX_OUT} block's full yield
-     * - the biggest thing the multiblock band (Compression / Decompression Manipulator) can make or release. It is
-     * deliberately {@code BCE_PIPE_MAX_TRANSFER_LOG[1]} on the transfer side: one tier-II pipe push fits the whole
-     * tank, so the multiblock's mass has a vault that neither the tier-I pipe band nor the original tank (sized to
-     * the tier-1000 Auto band) can strain.
+     * Capacity of the <em>tier-two</em> tank, in log10 BCE: one band-1 block's full yield - the biggest thing the
+     * band-1 multiblock (Compression / Decompression Manipulator) can make or release. It is deliberately
+     * {@code BCE_PIPE_MAX_TRANSFER_LOG[1]} on the transfer side: one tier-II pipe push fits the whole tank, so the
+     * multiblock's mass has a vault that neither the tier-I pipe band nor the original tank (sized to the tier-1000
+     * Auto band) can strain.
      */
     public static final double BCE_STORAGE_2_CAPACITY_LOG = CompressionBand.BAND_1.storageCapacityLog();
+    /**
+     * Capacity of the <em>tier-three</em> tank, in log10 BCE: one band-2 block's full yield - the biggest thing the
+     * band-2 multiblock can make or release. Same {@code BCE_PIPE_MAX_TRANSFER_LOG[2]}-mirrors-capacity rule as the
+     * tier-two tank: one tier-III pipe push fits the whole vault, so the band-2 machines finally have a pipe and a
+     * tank that can carry their mass (before this tier existed they had neither).
+     */
+    public static final double BCE_STORAGE_3_CAPACITY_LOG = CompressionBand.BAND_2.storageCapacityLog();
     /**
      * How many ticks a pipe network may reuse its cached store endpoints before rescanning. Placement and removal
      * invalidate eagerly via {@code neighborChanged}; this is the safety net for stores that appear/disappear
@@ -350,9 +371,11 @@ public final class CompressionConfig {
 
     // --- Seed cube render (the spinning cube drawn at the core; see client.CompressionCoreRenderer) ---------
     /**
-     * Side length, in blocks, of the seed cube. The core is a unit cube whose corners reach {@code sqrt(3)/2 ~ 0.87};
+     * <em>Band-1 base</em> side length, in blocks, of the seed cube (scale the higher bands grow from via
+     * {@link #seedCubeScale(CompressionBand)}). The core is a unit cube whose corners reach {@code sqrt(3)/2 ~ 0.87};
      * a concentric cube only hides it from <em>every</em> rotation once its inradius (scale/2) reaches that, i.e.
-     * {@code SEED_CUBE_SCALE >= sqrt(3)}. Keep it under 3 so the tumbling corners stay inside the 3x3x3 air interior.
+     * {@code SEED_CUBE_SCALE >= sqrt(3)}. The base stays well under 3 so band 1's tumbling corners remain inside its
+     * 3x3x3 air interior; later bands have a chamber {@code 2} blocks wider per band, which their larger scale fills.
      */
     public static final float SEED_CUBE_SCALE = 1.2F;
     /**
@@ -400,6 +423,43 @@ public final class CompressionConfig {
     public static final float PULSE_WIDTH = 0.04F;
     /** How long (in ticks) the completion flash expands and fades. New zap volleys are held for this long. */
     public static final int PULSE_TTL = 40;
+
+    /**
+     * Seed-cube scale for the core of {@code band}. {@link #SEED_CUBE_SCALE} is the <em>band-1</em> base (sized to fill
+     * the 5x5x5 Compression Manipulator's 3x3x3 air interior); every higher band has a roomier chamber - the compressor
+     * shell is {@code 2*index+1} blocks a side - so the render grows with the band index: band 2 draws the cube at 2x,
+     * band 3 at 3x, and so on, instead of a band-1 cube looking lost inside a bigger multiblock. Clamped to at least
+     * the base, so band 0 (single block) and the generator cores (which never use this render path) are unaffected.
+     */
+    public static float seedCubeScale(CompressionBand band) {
+        return SEED_CUBE_SCALE * Math.max(1, band.index());
+    }
+
+    /**
+     * How much the completion-flash <em>radii</em> grow for {@code band}. The flash has to stay inside the sealed
+     * chamber, so it tracks the chamber rather than the cube: the interior air is {@code 2r-1} blocks a side (half-width
+     * {@code r-0.5}) for compressor radius {@code r}, giving band 1 = {@code 1.0}, band 2 = {@code 1.667}, band 3 =
+     * {@code 2.333}. The earlier figure scaled by the cube's index instead, which grew faster than the box did - so on
+     * band 2 the doubled spokes punched clean out through the glass. Note only the shell the flash expands across uses
+     * this factor; {@link com.remag.rcc.client.CompressionCoreRenderer} keeps each spoke's <em>length</em> fixed, so a
+     * higher band gets a proportionally-larger-but-still-contained flash, never a longer-reaching one.
+     */
+    public static float effectGrowth(CompressionBand band) {
+        double chamber = Math.max(1, band.compressorRadius()) - 0.5D;   // interior air half-width for this band
+        double base = CompressionBand.BAND_1.compressorRadius() - 0.5D; // 1.5 -> band 1 factor is exactly 1.0
+        return (float) (chamber / base);
+    }
+
+    /**
+     * Craft time, in ticks, for a Compression Manipulator core of {@code band}. Each band above the first takes
+     * {@link #CRAFT_SLOWDOWN_PER_BAND}x longer per craft than the one below, so band 1 is the
+     * {@link #TICKS_PER_CRAFT} base (12s today), band 2 is 1.5x (18s), band 3 1.5^2 (27s), ... The exponent is
+     * {@code index - 1} because band 1 - the first multiblock - is the reference tier. Everything scales off that one
+     * base constant by multiplication, so raising the starting speed never means chasing a pile of hardcoded values.
+     */
+    public static int craftTicks(CompressionBand band) {
+        return Math.max(1, (int) Math.round(TICKS_PER_CRAFT * Math.pow(CRAFT_SLOWDOWN_PER_BAND, band.index() - 1)));
+    }
 
     private CompressionConfig() {
     }

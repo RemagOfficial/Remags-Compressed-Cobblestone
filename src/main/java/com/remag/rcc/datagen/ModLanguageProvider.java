@@ -28,6 +28,9 @@ public class ModLanguageProvider extends LanguageProvider {
         addBlock(ModBlocks.INTERFACE, "Compression Interface");
         addBlock(ModBlocks.CORE, "Compression Core");
         addBlock(ModBlocks.COMPRESSION_DECOMPRESSOR_CORE, "Decompression Core");
+        // The band-2 cores: same classes reading BAND_2's geometry, distinct names to tell the tiers apart.
+        addBlock(ModBlocks.COMPRESSION_CORE_2, "Compression Core II");
+        addBlock(ModBlocks.COMPRESSION_DECOMPRESSOR_CORE_2, "Decompression Core II");
         addBlock(ModBlocks.COMPRESSION_AUTO, "Compression Auto-Compressor");
         addBlock(ModBlocks.COMPRESSION_AUTO_DECOMPRESSOR, "Auto Decompressor");
         // BCE logistics. The pipe's item name is composed at runtime from these keys - "BCE Pipe" + a literal
@@ -39,6 +42,7 @@ public class ModLanguageProvider extends LanguageProvider {
         add("block.rcc.bce_pipe.passive", "Passive");
         addBlock(ModBlocks.BCE_STORAGE, "BCE Storage");
         addBlock(ModBlocks.BCE_STORAGE_2, "BCE Storage II");
+        addBlock(ModBlocks.BCE_STORAGE_3, "BCE Storage III");
         addItem(ModItems.WRENCH, "Compression Wrench");
         // Cobblestone generators: one registered block spans the whole output ladder, so there is a single base name
         // (the custom item composes the per-rung suffix from GeneratorTier.displaySuffix()) and a shared tooltip built
@@ -62,6 +66,7 @@ public class ModLanguageProvider extends LanguageProvider {
         // and the sneak-click status readout. The structure hint spells out the 3x3x4 contract so the tower is
         // buildable without docs.
         addBlock(ModBlocks.GENERATOR_CORE, "Generator Core");
+        addBlock(ModBlocks.GENERATOR_CORE_2, "Generator Core II");
         add("tooltip.rcc.generator_core.cost", "Power draw: %s FE/t while minting");
         add("tooltip.rcc.generator_core.hint",
                 "Sealed inside a 3x3x4 frame-and-glass tower with a 1x1 air shaft above or below the core: 1+ Power port, exactly 1 Item-Output (BCE-out) port, and exactly 1 Interface panel (right-click it for status)");

@@ -13,6 +13,7 @@ import com.remag.rcc.machine.CompressionFrameBlock;
 import com.remag.rcc.machine.CompressionGlassBlock;
 import com.remag.rcc.machine.CompressionInterfaceBlock;
 import com.remag.rcc.machine.CompressionPortBlock;
+import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.CompressionConfig;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -69,6 +70,20 @@ public class ModBlocks {
                             // where the model doesn't fill the cell. Match the glass: don't occlude neighbours.
                             .noOcclusion()));
 
+    /**
+     * The band-2 Compression Manipulator's core: the same block class and BE type as {@link #CORE}, but carrying
+     * {@link CompressionBand#BAND_2} so its structure scan reaches a 7x7x7 shell and its ceilings read 10^15..10^27.
+     * This is the whole point of the band-driven engine - a new band is one registration plus a table row, no new code.
+     */
+    public static final DeferredBlock<CompressionCoreBlock> COMPRESSION_CORE_2 =
+            BLOCKS.register("compression_core_2",
+                    () -> new CompressionCoreBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(8.0F, 12.0F)
+                            .requiresCorrectToolForDrops()
+                            .noOcclusion(),
+                            CompressionBand.BAND_2));
+
     /** Face panel that opens the machine GUI; the core itself is sealed and not directly clickable. */
     public static final DeferredBlock<CompressionInterfaceBlock> INTERFACE =
             BLOCKS.register("compression_interface",
@@ -89,6 +104,16 @@ public class ModBlocks {
                             .strength(8.0F, 12.0F)
                             .requiresCorrectToolForDrops()
                             .noOcclusion()));
+
+    /** The band-2 Decompression Manipulator's core: the same class, a 5x5x5 (radius-2) descent shell from BAND_2. */
+    public static final DeferredBlock<DecompressorCoreBlock> COMPRESSION_DECOMPRESSOR_CORE_2 =
+            BLOCKS.register("compression_decompressor_core_2",
+                    () -> new DecompressorCoreBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(8.0F, 12.0F)
+                            .requiresCorrectToolForDrops()
+                            .noOcclusion(),
+                            CompressionBand.BAND_2));
 
     /**
      * The single-block Auto-Compressor: automates the manual tier ladder up to tier 1000. Solid machine block that
@@ -153,6 +178,19 @@ public class ModBlocks {
                                     .requiresCorrectToolForDrops(),
                             CompressionConfig.BCE_STORAGE_2_CAPACITY_LOG));
 
+    /**
+     * The tier-three BCE tank: the same passive block and block-entity type as {@link #BCE_STORAGE_2}, sized to the
+     * band-2 multiblock - one full band-2 ({@code 10^27}-class) block's BCE. This is the vault the band-2 machines
+     * were missing: their mass outranges both the tier-I (band-0) and tier-II (band-1) tanks and the tier-II pipe.
+     */
+    public static final DeferredBlock<BceStorageBlock> BCE_STORAGE_3 =
+            BLOCKS.register("bce_storage_3",
+                    () -> new BceStorageBlock(BlockBehaviour.Properties.of()
+                                    .mapColor(MapColor.METAL)
+                                    .strength(5.0F, 6.0F)
+                                    .requiresCorrectToolForDrops(),
+                            CompressionConfig.BCE_STORAGE_3_CAPACITY_LOG));
+
     // --- Cobblestone generators (progression gate) -------------------------------------------
 
     /**
@@ -169,7 +207,7 @@ public class ModBlocks {
 
     /**
      * The tier-1 Generation Manipulator's controller: the sealed heart of the 3x3x4 generator tower that mints BCE
-     * on the {@code 9^n} curve from one tier-1000 block per second up to half a tier-{@code 10^12} block, burning
+     * on the {@code 9^n} curve from one tier-1000 block per second up to half a tier-{@code 10^15} block, burning
      * escalating FE while it runs. The {@code rung} state carries the ladder position (see
      * {@link com.remag.rcc.machine.GeneratorCoreTier}); like the other cores it uses a non-cube model, so it must
      * not occlude.
@@ -181,6 +219,21 @@ public class ModBlocks {
                             .strength(8.0F, 12.0F)
                             .requiresCorrectToolForDrops()
                             .noOcclusion()));
+
+    /**
+     * The band-2 Generation Manipulator's core: the same block and BE type as {@link #GENERATOR_CORE}, carrying
+     * {@link CompressionBand#BAND_2} so its rung ladder is drawn from that row's {@code rungExponents()} (10^15 ..
+     * 5*10^26, thirteen rungs - the same count band 1's ladder carries) and its tower is 5x5x6. The rung index rides
+     * the shared {@code rung} state exactly as band 1's does.
+     */
+    public static final DeferredBlock<GeneratorCoreBlock> GENERATOR_CORE_2 =
+            BLOCKS.register("generator_core_2",
+                    () -> new GeneratorCoreBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(8.0F, 12.0F)
+                            .requiresCorrectToolForDrops()
+                            .noOcclusion(),
+                            CompressionBand.BAND_2));
 
     public static void register(IEventBus eventBus) {
         BLOCKS.register(eventBus);

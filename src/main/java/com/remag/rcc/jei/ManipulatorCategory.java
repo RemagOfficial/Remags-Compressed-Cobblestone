@@ -2,6 +2,7 @@ package com.remag.rcc.jei;
 
 import com.remag.rcc.RCC;
 import com.remag.rcc.item.ModItems;
+import com.remag.rcc.registry.DisplayNames;
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
 import mezz.jei.api.gui.drawable.IDrawable;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
@@ -13,8 +14,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-
-import java.util.Locale;
 
 /**
  * JEI category for the Compression Manipulator's doubling cycle. Because the machine is block-entity driven and
@@ -85,17 +84,6 @@ public class ManipulatorCategory implements IRecipeCategory<ManipulatorDisplayRe
         guiGraphics.drawString(font, Component.translatable("jei.rcc.manipulator.info.energy", recipe.energyPerCraft()), TEXT_X, y, TEXT_COLOR, false);
         y += LINE_H;
         guiGraphics.drawString(font, Component.translatable("jei.rcc.manipulator.info.fuel_value",
-                powerOfTen(recipe.requiredFuelLog())), TEXT_X, y, TEXT_COLOR, false);
-    }
-
-    /** Compact {@code 10^N} rendering for a log10 mass, matching the in-game GUI readout. */
-    private static String powerOfTen(double log) {
-        if (log == Double.NEGATIVE_INFINITY || Double.isNaN(log) || log <= 0.0) {
-            return "0";
-        }
-        if (Math.abs(log - Math.rint(log)) < 1e-3) {
-            return "10^" + (long) Math.rint(log);
-        }
-        return String.format(Locale.US, "10^%.1f", log);
+                DisplayNames.bceMagnitude(recipe.requiredFuelLog())), TEXT_X, y, TEXT_COLOR, false);
     }
 }

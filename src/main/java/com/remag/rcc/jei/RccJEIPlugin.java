@@ -2,6 +2,7 @@ package com.remag.rcc.jei;
 
 import com.remag.rcc.RCC;
 import com.remag.rcc.item.ModItems;
+import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.CompressionConfig;
 import com.remag.rcc.registry.ModDataComponents;
 import mezz.jei.api.IModPlugin;
@@ -111,13 +112,18 @@ public class RccJEIPlugin implements IModPlugin {
     }
 
     /**
-     * The doubling cycle illustrated on two concrete rungs: the smallest accepted seed (1000 -> 2000) and one
-     * step up (2000 -> 4000). Fuel is the log10 base-cobblestone mass the machine must be fed for that seed.
+     * The doubling cycle illustrated on the two smallest accepted seeds of <em>each</em> shipped structure band:
+     * band 1 shows 1000 -> 2000 and 2000 -> 4000, band 2 shows 10^15 -> 2*10^15 and its next step up. Fuel is the
+     * log10 base-cobblestone mass the machine must be fed for that seed. Driven off the band table so a new band's
+     * cores automatically earn their own examples.
      */
     private static List<ManipulatorDisplayRecipe> buildManipulatorExamples() {
         List<ManipulatorDisplayRecipe> recipes = new ArrayList<>();
-        recipes.add(manipulatorExample(CompressionConfig.MANIPULATOR_MIN_IN));
-        recipes.add(manipulatorExample(CompressionConfig.MANIPULATOR_MIN_IN.multiply(BigInteger.TWO)));
+        for (CompressionBand band : new CompressionBand[]{CompressionBand.BAND_1, CompressionBand.BAND_2}) {
+            BigInteger minSeed = band.minInputTier();
+            recipes.add(manipulatorExample(minSeed));
+            recipes.add(manipulatorExample(minSeed.multiply(BigInteger.TWO)));
+        }
         return recipes;
     }
 

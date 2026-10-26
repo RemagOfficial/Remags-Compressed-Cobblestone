@@ -1,6 +1,7 @@
 package com.remag.rcc.machine;
 
 import com.remag.rcc.block.entity.ModBlockEntities;
+import com.remag.rcc.registry.CompressionBand;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -20,8 +21,27 @@ import org.jetbrains.annotations.Nullable;
  */
 public class CompressionCoreBlock extends Block implements EntityBlock {
 
+    /**
+     * The progression band this core's structure is built to. One class serves every band, so the geometry radius,
+     * port floor and tier ceilings the block entity validates against are read from this row rather than from the
+     * band-1 aliases in {@link com.remag.rcc.registry.CompressionConfig} - the same carries-a-value idiom as
+     * {@link BceStorageBlock}'s pool size. The single-argument constructor keeps the shipped band-1 registration
+     * (and every existing reference) reading exactly as before.
+     */
+    private final CompressionBand band;
+
     public CompressionCoreBlock(BlockBehaviour.Properties properties) {
+        this(properties, CompressionBand.BAND_1);
+    }
+
+    public CompressionCoreBlock(BlockBehaviour.Properties properties, CompressionBand band) {
         super(properties);
+        this.band = band;
+    }
+
+    /** The band whose table row drives this core's structure validation and ceilings. */
+    public CompressionBand band() {
+        return this.band;
     }
 
     @Nullable

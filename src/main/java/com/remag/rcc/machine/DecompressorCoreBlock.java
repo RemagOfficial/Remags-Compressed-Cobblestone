@@ -1,6 +1,7 @@
 package com.remag.rcc.machine;
 
 import com.remag.rcc.block.entity.ModBlockEntities;
+import com.remag.rcc.registry.CompressionBand;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -22,8 +23,26 @@ import org.jetbrains.annotations.Nullable;
  */
 public class DecompressorCoreBlock extends Block implements EntityBlock {
 
+    /**
+     * The progression band this decompressor core belongs to; its row's {@link CompressionBand#decompressorRadius()}
+     * drives the structure scan and the {@link CompressionBand#sinkCeilingLog()} sizes the released-mass buffer. One
+     * class serves every band ({@link BceStorageBlock}'s idiom); the single-argument constructor keeps the shipped
+     * band-1 registration reading as before.
+     */
+    private final CompressionBand band;
+
     public DecompressorCoreBlock(BlockBehaviour.Properties properties) {
+        this(properties, CompressionBand.BAND_1);
+    }
+
+    public DecompressorCoreBlock(BlockBehaviour.Properties properties, CompressionBand band) {
         super(properties);
+        this.band = band;
+    }
+
+    /** The band whose table row drives this core's structure validation. */
+    public CompressionBand band() {
+        return this.band;
     }
 
     @Nullable

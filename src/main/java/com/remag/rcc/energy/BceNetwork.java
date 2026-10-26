@@ -46,8 +46,8 @@ import java.util.Set;
  * magnitudes - one second of minting and a year of it are the same {@code double} - and {@code N} generators joined
  * that way would be indistinguishable from one. The bus therefore adds generators in <b>exponent</b> space instead:
  * every {@link IGeneratorArrayMember} draining into this run contributes its rung's {@link
- * CompressionBand#shareOf share} exponent, the bus sums those {@link BigInteger} exponents, clamps the total at the
- * highest band present's ceiling, and the one machine elected as {@link #isGeneratorLead array lead} mints the whole
+ * CompressionBand#shareOf share} exponent, the bus sums those {@link BigInteger} exponents, clamps the total at two
+ * band-max blocks, and the one machine elected as {@link #isGeneratorLead array lead} mints the whole
  * {@code 9^sum} as a single lump per second. That is the {@code MASTER_PLAN.md} D23 rule, and it is why the mint is one
  * lump rather than twenty slices: a slice is the quantity this number system cannot represent.
  *
@@ -76,9 +76,9 @@ public final class BceNetwork {
 
     /** Sum of the members' share exponents, before the band clamp - only the readout needs the unclamped figure. */
     private BigInteger arrayRawSum = BigInteger.ZERO;
-    /** Sum of the members' share exponents, clamped at the highest band present's ceiling: the lump size this bus mints. */
+    /** Sum of the members' share exponents, clamped at two band-max blocks: the lump size this bus mints. */
     private BigInteger arrayExponent = BigInteger.ZERO;
-    /** The highest band among the members, whose {@link CompressionBand#maxOutputTier()} is the clamp. */
+    /** The highest band among the members, whose {@link CompressionBand#maxOutputTier()} doubles into the clamp. */
     @Nullable
     private CompressionBand arrayBand;
     /** The member elected to mint the array's lump, or {@code null} when the run has no generator on it. */
@@ -247,9 +247,15 @@ public final class BceNetwork {
     }
 
     /**
-     * Sum the members' share exponents exactly, clamp the total at the highest band present's ceiling, and elect the
+     * Sum the members' share exponents exactly, clamp the total at two band-max blocks, and elect the
      * position-first member as the lead that will mint the lump. Called on every endpoint rebuild, so a generator
      * broken or starved mid-run leaves the array at the next refresh.
+     *
+     * <p>The ceiling is <b>two</b> of the highest band's blocks, not one, so a big enough array can mint the
+     * {@code MASTER_PLAN.md} D25 tier's <em>final</em> craft: that last cycle consumes both a seed block and an equal
+     * fuel-pool charge (double the seed's own mass), which is more than one band-max block worth of BCE. Clamping at a
+     * single block would pin a full bus ~10% short of it forever, no matter how many generators are added; two blocks
+     * gives "enough generators on the bus" a reachable target while still bounding the lump.
      */
     private void rebuildArray() {
         this.members.sort(Comparator.comparingLong(member -> member.store().asLong()));
@@ -263,8 +269,16 @@ public final class BceNetwork {
         }
         this.arrayRawSum = sum;
         this.arrayBand = band;
-        this.arrayExponent = band == null ? BigInteger.ZERO : sum.min(band.maxOutputTier());
+        this.arrayExponent = band == null ? BigInteger.ZERO : sum.min(arrayCeiling(band));
         this.arrayLead = this.members.isEmpty() ? null : this.members.get(0).store();
+    }
+
+    /**
+     * The largest lump this band's array may mint: {@code 2 *}{@link CompressionBand#maxOutputTier()} share exponents,
+     * i.e. two whole band-max blocks. Sized to cover the D25 final craft's doubled cost (see {@link #rebuildArray()}).
+     */
+    private static BigInteger arrayCeiling(CompressionBand band) {
+        return band.maxOutputTier().shiftLeft(1);
     }
 
     /** Rebuilds the endpoint caches if their TTL has run out, so a caller asking about the array never reads a stale one. */
@@ -287,10 +301,10 @@ public final class BceNetwork {
         return this.arrayExponent;
     }
 
-    /** The share sum before the clamp, so a readout can say "array exceeds this band's ceiling" instead of lying. */
+    /** The share sum before the clamp, so a readout can say "array exceeds two band-max blocks" instead of lying. */
     public boolean isArrayClamped() {
         ensureEndpoints();
-        return this.arrayBand != null && this.arrayRawSum.compareTo(this.arrayBand.maxOutputTier()) > 0;
+        return this.arrayBand != null && this.arrayRawSum.compareTo(arrayCeiling(this.arrayBand)) > 0;
     }
 
     /** Top-rung towers the array would need to mint a whole band-max block per second, or 0 with no generator on it. */

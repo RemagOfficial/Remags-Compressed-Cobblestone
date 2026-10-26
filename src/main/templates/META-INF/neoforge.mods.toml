@@ -90,6 +90,16 @@ versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="BOTH"
 
+# Patchouli is an OPTIONAL runtime dependency (Phase A-2 guide book). RCC loads fine without it: the shipped jar
+# never imports vazkii.patchouli.* and the rcc_manual book JSON is simply inert when Patchouli is absent. Declared
+# AFTER so the book's datagen'd content is discovered once Patchouli has registered its own resources.
+[[dependencies.${mod_id}]]
+modId="patchouli"
+type="optional"
+versionRange="[1.21.1-92,)"
+ordering="AFTER"
+side="BOTH"
+
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares
 # that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't
 # stop your mod loading on the server for example.
