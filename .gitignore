@@ -24,6 +24,6 @@ run
 # Files from Forge MDK
 forge*changelog.txt
 /src/generated/*
-/logs/*
+/logs
 MASTER_PLAN.md
 HANDOFF.md
