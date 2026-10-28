@@ -1,6 +1,7 @@
 package com.remag.rcc.machine;
 
 import com.remag.rcc.block.entity.ModBlockEntities;
+import com.remag.rcc.registry.Banded;
 import com.remag.rcc.registry.CompressionBand;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -23,30 +24,10 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * The tier-1 Generation Manipulator's centre block: the sealed heart of the 3x3x4 generator tower. One block covers
- * the whole ladder through a {@link GeneratorCoreTier} {@link #RUNG} block-state property (the same single-block
- * multi-variant shape as {@link CobblestoneGeneratorBlock}'s tier), and the rung rides in and out of placement on
- * the stack's {@code block_state} component.
- *
- * <p>Like the other multiblock cores it is <em>not</em> a machine you interact with to build - the structure is
- * assembled block by block in the world and validated by {@link GeneratorCoreBlockEntity#scanRegion()}. It has no
- * GUI: the tower's required {@link CompressionInterfaceBlock} panel is the normal way to read its status, since the
- * core ends up fully sealed inside the shell (where a sneak right-click still works if you expose it, but is not
- * the intended gesture). Whether a valid tower surrounds the core is block-entity state only, never a blockstate,
- * so the block keeps a single model.
- */
-public class GeneratorCoreBlock extends Block implements EntityBlock {
-    /**
-     * The rung index within this block's band ladder, a bounded {@code int} rather than a fixed enum so a new band's
-     * differently-sized ladder needs no new property constants (see {@link GeneratorCoreTier} for how an index and a
-     * band resolve to a rung's rate, share and FE bill). The bound is the widest ladder in the
-     * {@link CompressionBand} table; a narrower band simply never places the high indices.
-     */
+public class GeneratorCoreBlock extends Block implements EntityBlock, Banded {
     public static final IntegerProperty RUNG =
             IntegerProperty.create("rung", 0, CompressionBand.maxRungCount() - 1);
 
-    /** The progression band whose rung ladder this core block runs; one class serves every band. */
     private final CompressionBand band;
 
     public GeneratorCoreBlock(BlockBehaviour.Properties properties) {
@@ -59,12 +40,11 @@ public class GeneratorCoreBlock extends Block implements EntityBlock {
         this.registerDefaultState(this.stateDefinition.any().setValue(RUNG, 0));
     }
 
-    /** The band whose rung ladder and array divisor this core's rungs are drawn from. */
+    @Override
     public CompressionBand band() {
         return this.band;
     }
 
-    /** Resolve the rung this state runs on: this block's band and the {@link #RUNG} index it carries. */
     public GeneratorCoreTier rungFor(BlockState state) {
         return new GeneratorCoreTier(this.band, state.getValue(RUNG));
     }
@@ -80,12 +60,6 @@ public class GeneratorCoreBlock extends Block implements EntityBlock {
         builder.add(RUNG);
     }
 
-    /**
-     * Place on the rung index carried on the held stack's {@code block_state} component (the creative-tab per-rung
-     * entries and any broken-and-replaced core), defaulting to the band's base rung (index 0) when the stack names
-     * none - the {@link CobblestoneGeneratorBlock#getStateForPlacement} route. The index is clamped to this band's
-     * own ladder length so a foreign high index can never aim a narrower band's core off the end of its rungs.
-     */
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
@@ -104,7 +78,6 @@ public class GeneratorCoreBlock extends Block implements EntityBlock {
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        // Minting and the structure rescan are server-authoritative; the client needs no ticker.
         return level.isClientSide() ? null
                 : createTickerHelper(type, ModBlockEntities.GENERATOR_CORE.get(),
                 GeneratorCoreBlockEntity::serverTick);
@@ -120,7 +93,6 @@ public class GeneratorCoreBlock extends Block implements EntityBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                Player player, BlockHitResult hit) {
-        // Only the sneak gesture does anything; otherwise leave the block for placing against.
         if (!player.isSecondaryUseActive()) {
             return InteractionResult.PASS;
         }

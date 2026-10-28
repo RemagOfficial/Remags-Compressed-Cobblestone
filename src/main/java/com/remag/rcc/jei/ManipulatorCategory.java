@@ -15,15 +15,6 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
-/**
- * JEI category for the Compression Manipulator's doubling cycle. Because the machine is block-entity driven and
- * tier-agnostic (it accepts any seed tier at runtime), JEI can't derive a concrete recipe; the plugin supplies a
- * couple of pinned {@link ManipulatorDisplayRecipe} examples (seed {@code n} -> tier {@code 2n}).
- *
- * <p>The FE cost and the (astronomically large) fuel mass are drawn as plain text under the slots rather than as
- * custom energy/fluid drawables. The energy figure comes straight off the recipe and the fuel is the per-seed
- * value computed by the plugin from {@link com.remag.rcc.registry.CompressionConfig}, keeping the numbers honest.
- */
 public class ManipulatorCategory implements IRecipeCategory<ManipulatorDisplayRecipe> {
 
     public static final RecipeType<ManipulatorDisplayRecipe> TYPE =
@@ -32,14 +23,21 @@ public class ManipulatorCategory implements IRecipeCategory<ManipulatorDisplayRe
     private static final int SEED_X = 10;
     private static final int SLOT_Y = 8;
     private static final int OUTPUT_X = 84;
+    private static final int ARROW_X = 45;
+    private static final int ARROW_Y = SLOT_Y + 2;
     private static final int TEXT_X = 2;
     private static final int TEXT_Y = 30;
     private static final int LINE_H = 10;
-    private static final int TEXT_COLOR = 0xFFE0E0E0;
+    // Dark grey: JEI's recipe panel is light, so near-white text would be unreadable on it.
+    private static final int TEXT_COLOR = 0xFF404040;
+    private static final int WIDTH = 150;
+    private static final int HEIGHT = 62;
 
+    private final IGuiHelper guiHelper;
     private final IDrawable icon;
 
     public ManipulatorCategory(IGuiHelper guiHelper) {
+        this.guiHelper = guiHelper;
         this.icon = guiHelper.createDrawableItemStack(new ItemStack(ModItems.COMPRESSION_CORE.get()));
     }
 
@@ -53,14 +51,16 @@ public class ManipulatorCategory implements IRecipeCategory<ManipulatorDisplayRe
         return Component.translatable("jei.rcc.manipulator.title");
     }
 
+    // No getBackground() is supplied, so getWidth()/getHeight() must be overridden: JEI's defaults dereference a
+    // null background and throw during category registration.
     @Override
     public int getWidth() {
-        return 118;
+        return WIDTH;
     }
 
     @Override
     public int getHeight() {
-        return 62;
+        return HEIGHT;
     }
 
     @Override
@@ -70,13 +70,14 @@ public class ManipulatorCategory implements IRecipeCategory<ManipulatorDisplayRe
 
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, ManipulatorDisplayRecipe recipe, IFocusGroup focuses) {
-        builder.addInputSlot(SEED_X, SLOT_Y).addItemStack(recipe.seed());
-        builder.addOutputSlot(OUTPUT_X, SLOT_Y).addItemStack(recipe.output());
+        builder.addInputSlot(SEED_X, SLOT_Y).addItemStack(recipe.seed()).setStandardSlotBackground();
+        builder.addOutputSlot(OUTPUT_X, SLOT_Y).addItemStack(recipe.output()).setOutputSlotBackground();
     }
 
     @Override
     public void draw(ManipulatorDisplayRecipe recipe, IRecipeSlotsView recipeSlotsView, GuiGraphics guiGraphics,
                      double mouseX, double mouseY) {
+        guiHelper.getRecipeArrow().draw(guiGraphics, ARROW_X, ARROW_Y);
         var font = Minecraft.getInstance().font;
         int y = TEXT_Y;
         guiGraphics.drawString(font, Component.translatable("jei.rcc.manipulator.info.doubling"), TEXT_X, y, TEXT_COLOR, false);

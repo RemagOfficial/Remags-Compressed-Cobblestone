@@ -20,10 +20,6 @@ public class ModItemTagGenerator extends ItemTagsProvider {
 
     @Override
     protected void addTags(HolderLookup.Provider pProvider) {
-        // Publish the wrench onto the shared convention tag, which is the whole interop story: our tool then configures
-        // other mods' machines, and any wrench already in the pack (Mekanism's configurator, Create's wrench, ...) is
-        // accepted by BcePipeBlock's useItemOn through the same tag. Writing to another namespace's tag is normal -
-        // tags merge across packs at runtime.
         tag(ModItemTags.WRENCH).add(ModItems.WRENCH.get());
     }
 }

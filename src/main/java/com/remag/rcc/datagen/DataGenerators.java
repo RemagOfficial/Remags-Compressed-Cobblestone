@@ -22,11 +22,7 @@ public class DataGenerators {
 
         generator.addProvider(event.includeServer(), new ModRecipeProvider(packOutput, lookupProvider));
         generator.addProvider(event.includeServer(), ModLootTableProvider.create(packOutput, lookupProvider));
-        // The cobblestone-generator progression line: one advancement per rung, each gating the matching recipe.
         generator.addProvider(event.includeServer(), new ModAdvancementProvider(packOutput, lookupProvider, existingFileHelper));
-        // The rcc_manual Patchouli book, generated from the CompressionBand table so the previews cannot drift (D26).
-        // It writes both trees (data/ for book.json + recipe, assets/ for categories + entries), so run it whenever the
-        // server datagen pass is active; --all covers both.
         generator.addProvider(event.includeServer(), new ModPatchouliBookProvider(packOutput));
 
         generator.addProvider(event.includeClient(), new ModBlockStateProvider(packOutput, existingFileHelper));

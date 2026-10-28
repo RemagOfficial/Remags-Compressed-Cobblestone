@@ -17,20 +17,6 @@ import net.minecraft.world.level.Level;
 import java.math.BigInteger;
 import java.util.List;
 
-/**
- * Dynamic compression: a full 3x3 grid of the compressed item all at the <em>same</em> level {@code n}
- * crafts one stack at level {@code n+1}. One recipe instance covers every tier, so the recipe count no
- * longer scales with {@link CompressionConfig#MANUAL_MAX_LEVEL}.
- *
- * <p>It is a {@link RecipeType#CRAFTING} recipe so the crafting table picks it up. The tier is read from
- * the stack's {@link ModDataComponents#COMPRESSION_LEVEL} component (absent = level 1). Each slot must
- * hold exactly one item, which keeps vanilla's "consume one per slot" behaviour exact (nine in, one out).
- * Compressing the top tier is refused.
- *
- * <p>It implements {@link CraftingRecipe} (not just {@link Recipe}) because it is registered under
- * {@link RecipeType#CRAFTING}: consumers such as JEI cast every crafting-type recipe to
- * {@code CraftingRecipe}, so a bare {@code Recipe<CraftingInput>} would throw a {@code ClassCastException}.
- */
 public class CompressRecipe implements CraftingRecipe {
 
     @Override
@@ -62,7 +48,6 @@ public class CompressRecipe implements CraftingRecipe {
                 return false;
             }
         }
-        // A tier must be present and there must be a tier above it within the manual 3x3 cap.
         return shared != null
                 && shared.compareTo(BigInteger.ONE) >= 0
                 && shared.compareTo(CompressionConfig.MANUAL_MAX_LEVEL) < 0;
@@ -87,7 +72,6 @@ public class CompressRecipe implements CraftingRecipe {
 
     @Override
     public ItemStack getResultItem(HolderLookup.Provider registries) {
-        // The real tier depends on the grid; the recipe book only needs a representative stack.
         return new ItemStack(ModItems.COMPRESSED_COBBLESTONE.get());
     }
 
@@ -106,7 +90,6 @@ public class CompressRecipe implements CraftingRecipe {
         return RecipeType.CRAFTING;
     }
 
-    /** Build a single compressed stack at the given tier. Shared with {@link DecompressRecipe}. */
     static ItemStack levelStack(BigInteger tier) {
         ItemStack stack = new ItemStack(ModItems.COMPRESSED_COBBLESTONE.get());
         stack.set(ModDataComponents.COMPRESSION_LEVEL.get(), tier);

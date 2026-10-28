@@ -19,16 +19,6 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * The Auto Decompressor: a single-block machine that reverses the Auto-Compressor. Feed it FE and a compressed
- * seed, pick a goal tier in its GUI, and it steps the seed down tier-by-tier, banking the released mass into a
- * {@link com.remag.rcc.energy.IBceStorage BCE} buffer and ejecting the downgraded block once it reaches the goal.
- *
- * <p>Like the compressor this block is directly interactive (it is its own GUI entry point) and carries a
- * {@link BlockStateProperties#HORIZONTAL_FACING} state so the interface {@code front} panel turns to face the player
- * on placement. It exposes energy / item / BCE capabilities on every face; all logic is server-authoritative and the
- * client mirrors synced state through the shared menu's {@code ContainerData}.
- */
 public class CompressionAutoDecompressorBlock extends Block implements EntityBlock {
 
     public CompressionAutoDecompressorBlock(BlockBehaviour.Properties properties) {
@@ -42,7 +32,6 @@ public class CompressionAutoDecompressorBlock extends Block implements EntityBlo
         builder.add(BlockStateProperties.HORIZONTAL_FACING);
     }
 
-    /** Point the interface front at the player: the block faces back along their line of sight. */
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
@@ -59,7 +48,6 @@ public class CompressionAutoDecompressorBlock extends Block implements EntityBlo
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        // All machine logic is server-authoritative; the client needs no ticker.
         return level.isClientSide() ? null
                 : createTickerHelper(type, ModBlockEntities.COMPRESSION_AUTO_DECOMPRESSOR.get(),
                         CompressionAutoDecompressorBlockEntity::serverTick);
@@ -69,11 +57,9 @@ public class CompressionAutoDecompressorBlock extends Block implements EntityBlo
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                Player player, BlockHitResult hit) {
         if (level.isClientSide()) {
-            return InteractionResult.SUCCESS; // the server opens the menu
+            return InteractionResult.SUCCESS;
         }
         if (level.getBlockEntity(pos) instanceof CompressionAutoDecompressorBlockEntity machine) {
-            // Write the facing position AND the current goal tier into the open buffer so the client screen can
-            // prefill the goal-tier text field with the server-authoritative value.
             player.openMenu(machine, buf -> {
                 buf.writeBlockPos(pos);
                 buf.writeUtf(machine.goalTierString());

@@ -2,62 +2,33 @@ package com.remag.rcc.registry;
 
 import java.math.BigInteger;
 
-/**
- * Human-readable "Nthuple" names for the creative tooltip / lang entries.
- *
- * <p>These are display strings only and do not gate the level count: the block/item/recipe/
- * texture pipeline is fully dynamic. Names are GENERATED from the level number using the classic
- * Latin multiplicative series (the same construction the previously hand-written table used:
- * units before tens, e.g. 21 = "un"+"vigint" -> "unvigintuple"; 101 = "un"+"cent" -> "uncentuple"),
- * so any {@link CompressionConfig#MANUAL_MAX_LEVEL} produces correct names with no table to maintain.
- *
- * <p>Compared to the old hand-typed table the stems are normalized to standard Latin
- * (40 "quadragintuple" not "tetragintuple", 100 "centuple" not "hectuple", etc.). Counts above 999
- * have no clean single-word form, so they are shown as powers of ten (e.g. 1000 = "10\u00b3x",
- * 1500 = "10\u00b3\u00b7\u00b9\u00f7\u2076x" with a fractional exponent).</p>
- */
 public final class DisplayNames {
-    // Combining unit prefixes, indexed by the digit 0..9 (index 0 is empty).
     private static final String[] COMB = {
             "", "un", "duo", "tre", "quattuor", "quin", "sex", "septen", "octo", "novem"
     };
-    // Standalone words for levels 1..9 (irregular: "double", not "duo...").
     private static final String[] STANDALONE = {
             "single", "double", "triple", "quadruple", "quintuple", "sextuple", "septuple", "octuple", "nonuple"
     };
-    // Tens roots, indexed by the tens digit (2..9 used; 1 is handled as the "-dec-" teens).
     private static final String[] TENS = {
             "", "", "vigint", "trigint", "quadragint", "quinquagint", "sexagint", "septuagint", "octogint", "nonagint"
     };
-    // Hundreds roots, indexed by the hundreds digit (1..9).
     private static final String[] HUNDREDS = {
             "", "cent", "ducent", "trecent", "quadringent", "quingent", "sexcent", "septingent", "octingent", "nongent"
     };
-    // Unicode superscripts are BceNotation's job now (one level of them, and nesting for anything deeper).
-    // Decimal places shown for the fractional exponent of non-powers-of-ten (e.g. 1500 -> 10^3.176).
-    // Raise it to distinguish levels that sit very close together just above a power of ten.
     private static final int EXPONENT_DECIMALS = 3;
-    // Highest tier whose 9^tier BCE value is still printed as exact digits; beyond this bceValueText switches to the
-    // scientific 10^x form. 9^19 fits a long, 9^20 overflows it, so 19 is the last tier with a readable whole-number readout.
     private static final BigInteger MAX_EXACT_BCE_TIER = BigInteger.valueOf(19);
 
     private DisplayNames() {
     }
 
-    /** @param level 1-based compression level. */
     public static String compressed(int level) {
         return capitalize(tupleWord(level)) + " Compressed Cobblestone";
     }
 
-    /**
-     * @param level 1-based compression tier (arbitrarily large). Tiers up to 999 reuse the Latin multiplicative
-     * word; anything larger is shown as a base-10 power, matching the {@code >= 1000} int path.
-     */
     public static String compressed(BigInteger level) {
         return capitalize(tupleWord(level)) + " Compressed Cobblestone";
     }
 
-    /** Latin word for small tiers, otherwise the power-of-ten rendering. */
     static String tupleWord(BigInteger n) {
         if (n.compareTo(BigInteger.valueOf(1000)) < 0) {
             return tupleWord(n.intValue());
@@ -65,14 +36,6 @@ public final class DisplayNames {
         return powerOfTenWord(n);
     }
 
-    /**
-     * The BCE (base-cobblestone-equivalent) value of a single block at compression {@code tier}, as a short readable
-     * string for tooltips. A tier-{@code t} block is worth {@code 9^t} pieces of vanilla cobblestone, so vanilla itself
-     * ({@code tier 0}) reads {@code "1"} and the count then grows fast. The value is spelled out exactly while
-     * {@code 9^t} still fits a readable long ({@code t <= }{@link #MAX_EXACT_BCE_TIER}); past that it goes through
-     * {@link BceNotation}, which nests the exponent as soon as spelling it out stops being honest - the deep
-     * milestones land on {@code 9.54 \u00d7 10^99}-class figures that no integer type can carry.
-     */
     public static String bceValueText(BigInteger tier) {
         if (tier.signum() <= 0) {
             return "1";
@@ -81,17 +44,16 @@ public final class DisplayNames {
             long value = BigInteger.valueOf(9).pow(tier.intValue()).longValue();
             return String.format(java.util.Locale.US, "%,d", value);
         }
-        // Too big for exact digits: scientific notation, stacked if the exponent itself is huge (t * log10(9)).
         return BceNotation.flatLog10(CompressionConfig.bceMassLog(tier));
     }
 
-    /**
-     * The BCE value of a tier as a drawable power tower - the same figure {@link #bceValueText} spells out, kept
-     * structured so the tooltip can raise the exponent instead of flattening it into superscripts.
-     */
     public static BceNotation.Tower bceValueTower(BigInteger tier) {
         if (tier.signum() <= 0) {
             return new BceNotation.Tower.Plain("1");
+        }
+        if (tier.equals(CompressionBand.TOP.maxOutputTier())) {
+            return new BceNotation.Tower.Level("10",
+                    new BceNotation.Tower.Level("10", new BceNotation.Tower.Plain("100")));
         }
         if (tier.compareTo(MAX_EXACT_BCE_TIER) <= 0) {
             long value = BigInteger.valueOf(9).pow(tier.intValue()).longValue();
@@ -100,7 +62,6 @@ public final class DisplayNames {
         return BceNotation.ofLog10(CompressionConfig.bceMassLog(tier));
     }
 
-    /** Builds the Latin multiplicative word for {@code n} (without the " Compressed Cobblestone" suffix). */
     public static String tupleWord(int n) {
         if (n < 1) {
             throw new IllegalArgumentException("Compression levels start at 1, got: " + n);
@@ -109,8 +70,6 @@ public final class DisplayNames {
             return STANDALONE[n - 1];
         }
         if (n >= 1000) {
-            // Past 999 there is no clean single-word Latin form, so show the level as a power of ten:
-            // exact powers get an integer exponent, everything in between a fractional (decimal) one.
             return powerOfTenWord(n);
         }
         int hundreds = n / 100;
@@ -125,19 +84,14 @@ public final class DisplayNames {
         if (low.isEmpty()) {
             return hundredRoot + "uple";
         }
-        // A connecting "a" always separates the remainder from the hundred root
-        // (Latin "triginta centum" -> "trigintacent"). Keeping it for bare units too
-        // (not just tens) avoids collisions such as 103 "trecent" == 300 "trecent".
         return low + "a" + hundredRoot + "uple";
     }
 
-    /** Word for the 0..99 remainder, using the combining forms (empty string for 0). */
     private static String belowHundredWord(int tens, int ones) {
         if (tens == 0) {
             return ones == 0 ? "" : COMB[ones];
         }
         if (tens == 1) {
-            // Teens: units (if any) prefix the "dec" root. 10 -> "dec", 11 -> "undec", 17 -> "septendec".
             return COMB[ones] + "dec";
         }
         String root = TENS[tens];
@@ -147,8 +101,6 @@ public final class DisplayNames {
         return combine(COMB[ones], root) + root;
     }
 
-    /** Elides a trailing vowel from the unit prefix when the following root starts with a vowel
-     * (e.g. "octo" + "octogint" -> "oct" + "octogint", "duo" + "octogint" -> "du" + "octogint"). */
     private static String combine(String prefix, String root) {
         boolean prefixEndsO = prefix.endsWith("o");
         boolean rootStartsVowel = !root.isEmpty() && isVowel(root.charAt(0));
@@ -159,11 +111,6 @@ public final class DisplayNames {
         return c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u';
     }
 
-    /**
-     * Renders a large tier {@code n} (>= 1000) purely as a power of ten, suffixed with "x" to read as a
-     * multiplier. Exact powers of ten show an integer exponent ({@code 1000 -> 10\u00b3x}); any value between
-     * exact powers uses the fractional exponent {@code log\u2081\u2080(n)} at {@link #EXPONENT_DECIMALS} precision.
-     */
     static String powerOfTenWord(BigInteger n) {
         String digits = n.toString();
         boolean exactPowerOfTen = digits.charAt(0) == '1' && digits.chars().skip(1).allMatch(c -> c == '0');
@@ -175,45 +122,28 @@ public final class DisplayNames {
         return "10" + superscript(expStr) + "x";
     }
 
-    /**
-     * Renders {@code n} (>= 1000) purely as a power of ten, suffixed with "x" to read as a multiplier.
-     * Exact powers show an integer exponent ({@code 1000 -> 10\u00b3x}); any value between exact powers
-     * uses the fractional exponent log\u2081\u2080(n) at {@link #EXPONENT_DECIMALS} precision
-     * ({@code 1500 -> 10\u00b3\u00b7\u00b9\u2077\u2076x}), so the label always reflects the level's magnitude.
-     */
     static String powerOfTenWord(int n) {
-        int digitExponent = Integer.toString(n).length() - 1; // digit count - 1
+        int digitExponent = Integer.toString(n).length() - 1;
         long pow = 1;
         for (int i = 0; i < digitExponent; i++) {
             pow *= 10;
         }
         if (n == pow) {
-            // Exact power of ten -> clean integer exponent.
             return "10" + superscript(Integer.toString(digitExponent)) + "x";
         }
-        // Between exact powers -> fractional exponent = log10(n), fixed decimal precision.
         double exponent = Math.log10(n);
         String expStr = String.format(java.util.Locale.US, "%." + EXPONENT_DECIMALS + "f", exponent);
         return "10" + superscript(expStr) + "x";
     }
 
-    /** Converts ASCII digits (and the decimal point, to a superscript middle dot) to Unicode superscripts. */
     private static String superscript(String s) {
         return BceNotation.superscript(s);
     }
 
-    /**
-     * Renders a log10 BCE mass (a {@code double} holding {@code log10(amount)}) as a compact power-of-ten string for
-     * chat/tooltip readouts: whole exponents stay exact ({@code 10\u00b3}) and anything between shows one decimal
-     * ({@code 10\u00b9\u00b7\u2077}). An empty pool ({@link Double#NEGATIVE_INFINITY}) reads as {@code 0}. Delegates
-     * to {@link BceNotation}, which stacks the exponent instead of casting it to a {@code long} once it is too large
-     * to spell - the old cast saturated and printed {@code 9223372036854775807} on the deep milestones.
-     */
     public static String bceMagnitude(double log10Amount) {
         return BceNotation.flatMagnitude(log10Amount);
     }
 
-    /** Roman numeral for a small positive number (1..15); the pipe ladder's tier labels use this. */
     public static String roman(int number) {
         int[] values = {10, 9, 5, 4, 1};
         String[] symbols = {"X", "IX", "V", "IV", "I"};

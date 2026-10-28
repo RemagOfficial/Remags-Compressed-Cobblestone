@@ -15,15 +15,6 @@ import net.minecraft.world.level.block.Block;
 
 import java.util.List;
 
-/**
- * The single item behind every BCE pipe. The tier rides on the stack's vanilla {@code block_state} component (exactly
- * how {@link com.remag.rcc.machine.CompressionPortBlock} carries its three kinds), so one registration covers the
- * whole ladder: {@code "BCE Pipe II"}.
- *
- * <p>The <em>direction</em> is not part of the item at all: it lives on each of the six ends and is configured in
- * world with a wrench (see {@link BcePipeBlock}), so a stack's label carries only its tier - there is no single
- * "this pipe's mode" to name any more than there is a way to say which end the player intends to point.
- */
 public class BcePipeItem extends BlockItem {
 
     public BcePipeItem(Block block, Properties properties) {
@@ -40,8 +31,6 @@ public class BcePipeItem extends BlockItem {
                 tier = fromState;
             }
         }
-        // "BCE Pipe II". The separator is a literal rather than part of the lang value because a .properties value
-        // loses any leading whitespace when loaded.
         return Component.translatable("block.rcc.bce_pipe")
                 .append(Component.literal(" " + DisplayNames.roman(tier.number())));
     }

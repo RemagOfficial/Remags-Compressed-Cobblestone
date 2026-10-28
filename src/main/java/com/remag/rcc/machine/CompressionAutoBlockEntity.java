@@ -26,26 +26,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.math.BigInteger;
 
-/**
- * Controller of the single-block {@link CompressionAutoBlock}. It automates the manual 3x3 ladder: hold a seed,
- * burn fed cobblestone mass to upgrade it one tier at a time, and once it reaches
- * {@link CompressionConfig#AUTO_TARGET_LEVEL} (tier 1000) eject it to the output slot for the multiblock to consume.
- *
- * <p>Like the multiblock core it keeps a receive-only FE buffer and a log10-base-cobblestone fuel pool, but its
- * economy differs: each {@code t -> t+1} step consumes only the <em>differential</em> mass
- * ({@link CompressionConfig#requiredStepMassLog}) from the pool rather than the whole pool, so a single large feed
- * powers many steps up the ladder. Steps are timed ({@link CompressionConfig#AUTO_TICKS_PER_STEP} ticks each) and
- * drain {@link CompressionConfig#AUTO_ENERGY_PER_STEP} FE across them.
- *
- * <p>Fuel arrives two ways and lands in the same pool, because BCE <em>is</em> log10 cobblestone-equivalent mass - the
- * machine's native unit: as items through the item handler ({@link #acceptFuel}), or as BCE through an insert-mode BCE
- * pipe, which sees the {@link #getBceFuel sink-only view} of the capability. A pipe can never take fuel back out, so a
- * line cannot be looped to launder its own contents.
- *
- * <p>It drives the shared {@link CompressionCoreMenu}/{@link com.remag.rcc.client.CompressionCoreScreen} by
- * implementing {@link ICompressionMachine}, so the GUI (seed slot, output slot, fuel/progress/energy gauges) is
- * identical to the multiblock's. It exposes side-based capabilities directly (no port blocks).
- */
 public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvider, ICompressionMachine, ICompressTarget {
     private static final String TAG_SEED = "seed";
     private static final String TAG_OUTPUT = "output";
@@ -56,12 +36,8 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
 
     private final ItemStackHandler seed = new ItemStackHandler(1);
     private final ItemStackHandler output = new ItemStackHandler(1);
-    // Insert=fuel / extract=output view exposed on every face, so pipes/hoppers can both feed the pool and pull
-    // the finished tier-1000 block from the same capability without needing dedicated port blocks.
     private final AutoItemHandler itemHandler = new AutoItemHandler(this);
 
-    // Internal FE buffer kept as a plain count so the machine can spend it directly; the exposed view is receive-only
-    // (a NeoForge EnergyStorage with maxExtract 0 would also block our own extractEnergy, so we wrap a view).
     private int energy = 0;
     private final IEnergyStorage energyView = new IEnergyStorage() {
         @Override
@@ -71,7 +47,7 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
 
         @Override
         public int extractEnergy(int maxExtract, boolean simulate) {
-            return 0; // automation cannot pull energy back out
+            return 0;
         }
 
         @Override
@@ -95,27 +71,10 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
         }
     };
 
-    /** Accumulated fuel mass in log10-base-cobblestone space; {@link Double#NEGATIVE_INFINITY} means empty. */
     private double fuelPool = Double.NEGATIVE_INFINITY;
-    /** 0 when idle, otherwise counting up to {@link CompressionConfig#AUTO_TICKS_PER_STEP}. */
     private int progress = 0;
-    /**
-     * The tier the seed is climbed up to; the machine stops (and ejects the result) once it reaches this. Defaults to
-     * the top tier so a fresh machine still runs all the way to 1000, but a player can lower it to stop partway and
-     * uncraft the partial block back down by hand (e.g. to recover vanilla cobblestone).
-     */
     private BigInteger goalTier = CompressionConfig.AUTO_TARGET_LEVEL;
 
-    /**
-     * The BCE face of {@link #fuelPool}: what a pipe sees when an insert end is placed against this machine. Same
-     * log10 numbers, so no conversion exists to get wrong - one BCE is one vanilla cobblestone, which is exactly the
-     * unit the pool is already kept in.
-     *
-     * <p>It is a pure <em>sink</em>: {@link #canExtract()} is false, so the fuel a bus has delivered can never be
-     * pulled back out by the same or another pipe (an extract end pointed here simply finds nothing to read and is
-     * skipped as a source). Like the storage tank it accepts <em>partially</em> rather than refusing an oversized
-     * slice outright, so a bus can fill it right up to {@link CompressionConfig#AUTO_BCE_CAPACITY_LOG}.
-     */
     private final IBceStorage bceFuelView = new IBceStorage() {
         @Override
         public double getBceStoredLog() {
@@ -135,14 +94,12 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
             double free = CompressionConfig.log10subtract(
                     CompressionConfig.AUTO_BCE_CAPACITY_LOG, CompressionAutoBlockEntity.this.fuelPool);
             if (free == Double.NEGATIVE_INFINITY) {
-                return Double.NEGATIVE_INFINITY; // nothing a bus can push will land here until it is spent
+                return Double.NEGATIVE_INFINITY;
             }
             double accepted = Math.min(amountLog, free);
             if (!simulate) {
                 double merged = CompressionConfig.log10add(
                         CompressionAutoBlockEntity.this.fuelPool, accepted);
-                // Clamp so rounding cannot leave the pool a hair above the ceiling, which would make `free` forever
-                // positive and let the machine accept fuel it has no room for.
                 CompressionAutoBlockEntity.this.fuelPool =
                         Math.min(merged, CompressionConfig.AUTO_BCE_CAPACITY_LOG);
                 setChanged();
@@ -152,7 +109,7 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
 
         @Override
         public double extractBce(double amountLog, boolean simulate) {
-            return Double.NEGATIVE_INFINITY; // fuel is one-way: see canExtract()
+            return Double.NEGATIVE_INFINITY;
         }
 
         @Override
@@ -170,8 +127,6 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
         super(ModBlockEntities.COMPRESSION_AUTO.get(), pos, state);
     }
 
-    // --- ICompressionMachine / capability accessors --------------------------------------------
-
     @Override
     public ItemStackHandler getSeed() {
         return seed;
@@ -187,36 +142,24 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
         return energyView;
     }
 
-    /** The combined fuel-in / output-out handler exposed on all faces (see {@link AutoItemHandler}). */
     public AutoItemHandler getItemHandler(@Nullable Direction side) {
         return itemHandler;
     }
 
-    /**
-     * The sink-only BCE view of the fuel pool, offered on every face so an insert-mode pipe end can burn BCE here the
-     * same way a hopper feeds cobblestone in (see {@link #bceFuelView}).
-     */
     public IBceStorage getBceFuel(@Nullable Direction side) {
         return this.bceFuelView;
     }
 
-    /** Accepts compressed cobblestone of any tier AND plain vanilla cobblestone as the tier-1 starting seed. */
     @Override
     public boolean acceptsSeed(ItemStack stack) {
         return !stack.isEmpty() && (stack.is(ModItems.COMPRESSED_COBBLESTONE.get()) || stack.is(Items.COBBLESTONE));
     }
-
-    // --- ICompressTarget (goal tier) ------------------------------------------------------------
 
     @Override
     public BigInteger getGoalTier() {
         return goalTier;
     }
 
-    /**
-     * Clamp a submitted goal into {@code [1, }{@link CompressionConfig#AUTO_TARGET_LEVEL}{@code ]}. A null / non-positive
-     * value falls back to the default (compress all the way), so a blank field never strands the machine at tier 0.
-     */
     @Override
     public void setGoalTier(BigInteger goal) {
         this.goalTier = (goal == null || goal.signum() <= 0)
@@ -250,10 +193,6 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
         return requiredStepFuel();
     }
 
-    /**
-     * Fuel (log10 BCE) the next step needs for the whole seed stack: the per-unit tier differential scaled by the
-     * number of blocks in the seed slot, so a stack of seeds is charged for every upgrade it contains.
-     */
     private double requiredStepFuel() {
         BigInteger n = seedTier();
         if (n == null) {
@@ -264,7 +203,6 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
         return count > 1 ? perUnit + Math.log10(count) : perUnit;
     }
 
-    /** A single block is always ready; there is no surrounding structure to validate. */
     @Override
     public boolean isFormed() {
         return true;
@@ -290,7 +228,7 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
             BigInteger tier = stack.getOrDefault(ModDataComponents.COMPRESSION_LEVEL.get(), BigInteger.ONE);
             massLog = CompressionConfig.bceMassLog(tier);
         } else {
-            massLog = 0.0; // vanilla cobblestone = 1 BCE (9^0) -> log10 = 0
+            massLog = 0.0;
         }
         massLog += Math.log10(stack.getCount());
         this.fuelPool = CompressionConfig.log10add(this.fuelPool, massLog);
@@ -307,12 +245,10 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
             return stack.getOrDefault(ModDataComponents.COMPRESSION_LEVEL.get(), BigInteger.ONE);
         }
         if (stack.is(Items.COBBLESTONE)) {
-            return BigInteger.ZERO; // a plain cobblestone seed starts the ladder at tier 0
+            return BigInteger.ZERO;
         }
         return null;
     }
-
-    // --- Cycle logic ---------------------------------------------------------------------------
 
     public static void serverTick(Level level, BlockPos pos, BlockState state, CompressionAutoBlockEntity be) {
         if (be.progress > 0) {
@@ -335,7 +271,7 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
         }
         BigInteger n = seedTier();
         if (n == null || n.compareTo(goalTier) >= 0) {
-            return false; // nothing to upgrade (no seed, or already at/above the goal)
+            return false;
         }
         if (!(fuelPool >= requiredStepFuel())) {
             return false;
@@ -343,8 +279,6 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
         if (energy < CompressionConfig.AUTO_ENERGY_PER_STEP) {
             return false;
         }
-        // Only the final step produces an output item; intermediate steps upgrade the seed in place, so they never
-        // need output room. Require space for the whole seed stack as goal-tier results.
         if (n.add(BigInteger.ONE).compareTo(goalTier) >= 0) {
             ItemStack probe = tierStack(goalTier);
             probe.setCount(seed.getStackInSlot(0).getCount());
@@ -362,21 +296,18 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
             setChanged();
             return;
         }
-        // Spend exactly this step's differential mass (scaled by the seed stack size); any surplus stays pooled.
         int seedCount = this.seed.getStackInSlot(0).getCount();
         double spend = CompressionConfig.requiredStepMassLog(t)
                 + (seedCount > 1 ? Math.log10(seedCount) : 0.0);
         this.fuelPool = CompressionConfig.log10subtract(this.fuelPool, spend);
         BigInteger next = t.add(BigInteger.ONE);
-        // Always rebuild the seed as a real compressed-cobblestone stack at the new tier (a vanilla-cobblestone seed
-        // is converted here on its first step), preserving the stack size.
         ItemStack upgraded = tierStack(next);
         upgraded.setCount(seedCount);
         this.seed.extractItem(0, seedCount, false);
         if (next.compareTo(goalTier) < 0) {
-            this.seed.insertItem(0, upgraded, false); // upgraded work-in-progress stays in the seed slot
+            this.seed.insertItem(0, upgraded, false);
         } else {
-            this.output.insertItem(0, upgraded, false); // finished goal-tier result moves to the output slot
+            this.output.insertItem(0, upgraded, false);
         }
         setChanged();
     }
@@ -387,8 +318,6 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
         return stack;
     }
 
-    // --- MenuProvider (opened directly on the block) -------------------------------------------
-
     @Override
     public Component getDisplayName() {
         return Component.translatable("block.rcc.compression_auto");
@@ -398,8 +327,6 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
     public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {
         return new CompressionCoreMenu(containerId, playerInventory, this);
     }
-
-    // --- Persistence ---------------------------------------------------------------------------
 
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
@@ -427,7 +354,6 @@ public class CompressionAutoBlockEntity extends BlockEntity implements MenuProvi
         this.progress = tag.getInt(TAG_PROGRESS);
     }
 
-    /** Read a persisted goal, defaulting to the top tier when absent / blank / malformed / out of range. */
     private static BigInteger parseGoal(String raw) {
         if (raw == null || raw.isBlank()) {
             return CompressionConfig.AUTO_TARGET_LEVEL;

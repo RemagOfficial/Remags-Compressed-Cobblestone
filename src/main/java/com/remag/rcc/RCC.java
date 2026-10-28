@@ -19,7 +19,6 @@ import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
 import org.slf4j.Logger;
 
-// The value here should match an entry in the META-INF/neoforge.mods.toml file
 @Mod(RCC.MODID)
 public class RCC
 {
@@ -37,14 +36,10 @@ public class RCC
         ModCreativeModeTab.TABS.register(modEventBus);
         ModMenus.register(modEventBus);
 
-        // Port block capabilities (energy / item handler) are needed on both sides.
         modEventBus.addListener(CommonEvents::registerCapabilities);
 
-        // Custom network payloads (the Auto Decompressor's goal-tier setter) are registered on both sides.
         modEventBus.addListener(ModNetwork::register);
 
-        // Runtime per-level tinting is client-only; guard so the class (and its client-only event types)
-        // is never loaded on a dedicated server.
         if (FMLEnvironment.dist == Dist.CLIENT) {
             ClientEvents.register(modEventBus);
         }

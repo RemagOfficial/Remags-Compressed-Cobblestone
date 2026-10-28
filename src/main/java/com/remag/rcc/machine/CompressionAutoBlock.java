@@ -19,16 +19,6 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * The Auto-Compressor: a single-block machine that automates the manual tier ladder up to
- * {@link com.remag.rcc.registry.CompressionConfig#AUTO_TARGET_LEVEL}. Feed it FE, any-tier cobblestone (fuel) and a
- * seed, and it repeatedly upgrades the seed one tier at a time until it reaches the target, then ejects the result.
- *
- * <p>Unlike the sealed multiblock core this block is directly interactive: right-clicking it opens the shared
- * {@link com.remag.rcc.menu.CompressionCoreMenu}. It carries a {@link BlockStateProperties#HORIZONTAL_FACING}
- * state so the interface {@code front} panel turns to face the player on placement. All logic is
- * server-authoritative; the client only mirrors synced state through that menu's {@code ContainerData}.
- */
 public class CompressionAutoBlock extends Block implements EntityBlock {
 
     public CompressionAutoBlock(BlockBehaviour.Properties properties) {
@@ -42,7 +32,6 @@ public class CompressionAutoBlock extends Block implements EntityBlock {
         builder.add(BlockStateProperties.HORIZONTAL_FACING);
     }
 
-    /** Point the interface front at the player: the block faces back along their line of sight. */
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
@@ -59,7 +48,6 @@ public class CompressionAutoBlock extends Block implements EntityBlock {
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        // All machine logic is server-authoritative; the client needs no ticker.
         return level.isClientSide() ? null
                 : createTickerHelper(type, ModBlockEntities.COMPRESSION_AUTO.get(), CompressionAutoBlockEntity::serverTick);
     }
@@ -68,11 +56,9 @@ public class CompressionAutoBlock extends Block implements EntityBlock {
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                Player player, BlockHitResult hit) {
         if (level.isClientSide()) {
-            return InteractionResult.SUCCESS; // the server opens the menu
+            return InteractionResult.SUCCESS;
         }
         if (level.getBlockEntity(pos) instanceof CompressionAutoBlockEntity machine) {
-            // Write the position AND the current goal tier into the open buffer so the client screen can prefill the
-            // goal-tier text field with the server-authoritative value (mirrors the Auto Decompressor).
             player.openMenu(machine, buf -> {
                 buf.writeBlockPos(pos);
                 buf.writeUtf(machine.goalTierString());

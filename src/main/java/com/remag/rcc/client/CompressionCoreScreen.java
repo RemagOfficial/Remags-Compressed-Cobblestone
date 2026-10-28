@@ -1,6 +1,7 @@
 package com.remag.rcc.client;
 
 import com.remag.rcc.RCC;
+import com.remag.rcc.machine.ICompressionMachine.CraftStatus;
 import com.remag.rcc.menu.CompressionCoreMenu;
 import com.remag.rcc.network.BceGoalTierPayload;
 import com.remag.rcc.registry.BceNotation;
@@ -22,49 +23,31 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-/**
- * Renders the Compression Manipulator state: the seed slot plus three vertical gauges (fuel-mass ratio on the
- * left, craft progress and energy on the right of the machine slots). Each gauge is filled bottom-up from the
- * separate {@code compression_core_fill.png} strip (crop for the detailed fuel/energy art, stretch for the solid
- * green progress). All numbers come from the {@link CompressionCoreMenu}'s synced {@code ContainerData} mirror,
- * so this screen never touches the block entity directly. Hovering a bar shows its exact readout (fuel mass,
- * craft percentage, stored energy) via {@link #renderTooltip}, which also forwards to the super slot-item tooltip.
- */
 public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCoreMenu> {
     private static final int TITLE_COLOR = 0x404040;
 
     private static final ResourceLocation TEXTURE =
             ResourceLocation.fromNamespaceAndPath(RCC.MODID, "textures/gui/container/compression_core.png");
-    // The Auto Compressor and Auto Decompressor share this screen but each has its own sheet: identical gauge wells
-    // and slot positions, plus a small notch between the input and output slots that marks where the goal-tier text
-    // box sits. The compressor sheet is art-identical to the decompressor's; it is a separate file only for
-    // organisation, so the same field geometry lines up on both.
     private static final ResourceLocation DECOMPRESSOR_TEXTURE =
             ResourceLocation.fromNamespaceAndPath(RCC.MODID, "textures/gui/container/decompressor.png");
     private static final ResourceLocation COMPRESSOR_TEXTURE =
             ResourceLocation.fromNamespaceAndPath(RCC.MODID, "textures/gui/container/compressor.png");
-    // Separate fill strip (64x77): three bottom-up bar graphics side by side - cobblestone (fuel), solid green
-    // (craft progress), red (energy). White separator lines sit at x=20/40/60; the coloured interior is y=4..72.
     private static final ResourceLocation FILL_TEXTURE =
             ResourceLocation.fromNamespaceAndPath(RCC.MODID, "textures/gui/container/compression_core_fill.png");
     private static final int FILL_TEX_W = 64;
     private static final int FILL_TEX_H = 77;
-    private static final int FILL_V0 = 4;   // first row of the coloured interior
-    private static final int FILL_IH = 69;  // interior height (rows 4..72)
-    // Left edge of each gauge's source column within the fill strip.
+    private static final int FILL_V0 = 4;
+    private static final int FILL_IH = 69;
     private static final int FUEL_U = 1;
     private static final int PROG_U = 21;
     private static final int POWER_U = 41;
-    // On-screen gauge geometry: each bar's top-left, matched to the wells baked into the GUI texture. Nudge the
-    // three X constants (and BAR_Y) together with the texture if the alignment is off.
     private static final int BAR_W = 19;
-    private static final int BAR_H = FILL_IH; // 1:1 vertical for the cropped (fuel/energy) bars
+    private static final int BAR_H = FILL_IH;
     private static final int BAR_Y = 34;
     private static final int FUEL_X = 14;
     private static final int PROG_X = 102;
     private static final int POWER_X = 139;
 
-    // Goal-tier input for the Auto Compressor / Auto Decompressor (null for the manipulator).
     @Nullable
     private EditBox goalField;
 
@@ -80,9 +63,6 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
     protected void init() {
         super.init();
         if (this.menu.hasGoalField()) {
-            // The goal-tier number, typed and sent on Enter. It is a normal bordered field, centred on the notch
-            // baked into the Auto machines' sheets (x56..81, y65..73) so the box reads as its alignment guide - the
-            // field covers it, so the drawn box never shows. There is no separate text label (no room beside it).
             EditBox field = new EditBox(this.font, this.leftPos + 48, this.topPos + 63, 40, 12,
                     Component.translatable("container.rcc.compression_core.goal"));
             field.setMaxLength(16);
@@ -107,7 +87,6 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
-    /** Push the typed goal tier to the server; blank input is ignored (the machine keeps its current goal). */
     private void sendGoalTier() {
         if (this.goalField == null) {
             return;
@@ -123,26 +102,17 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
         int x = this.leftPos;
         int y = this.topPos;
 
-        // Panel + baked bar wells from the main sheet. Each Auto machine has its own sheet (both add the goal-tier box
-        // notch); the manipulator uses the base sheet. The 9-arg blit carries the real 176x202 texture size so the art
-        // is drawn 1:1 (the 7-arg overload would assume a 256x256 sheet and mis-scale it).
         ResourceLocation background = this.menu.isCompressor() ? COMPRESSOR_TEXTURE
                 : this.menu.isDecompressor() ? DECOMPRESSOR_TEXTURE : TEXTURE;
         graphics.blit(background, x, y, 0.0F, 0.0F, this.imageWidth, this.imageHeight, this.imageWidth, this.imageHeight);
 
-        // Fuel gauge (cobblestone, cropped bottom-up by current/required mass in log10 space).
         blitBarCrop(graphics, x + FUEL_X, y + BAR_Y, FUEL_U, fuelFraction());
 
-        // Craft-progress gauge (solid green, stretched bottom-up - no detail to preserve, so scaling is fine).
         blitBarStretch(graphics, x + PROG_X, y + BAR_Y, PROG_U, progressFraction());
 
-        // Energy gauge (red, cropped bottom-up).
         blitBarCrop(graphics, x + POWER_X, y + BAR_Y, POWER_U, energyFraction());
     }
 
-    // --- Gauge fractions (shared by the bar fill and the hover tooltips) -----------------------
-
-    /** Fuel pool relative to the seed's requirement: {@code 10^(current-required)} capped to 1 (0 with no seed). */
     private double fuelFraction() {
         double current = this.menu.currentFuelLog();
         double required = this.menu.requiredFuelLog();
@@ -160,25 +130,16 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
         return (double) this.menu.energy() / Math.max(1, this.menu.maxEnergy());
     }
 
-    /**
-     * Reveals the bottom {@code fraction} of a gauge column without distorting it (crop): the source slice and the
-     * destination rectangle share the same height, so the cobblestone / energy art stays pixel-crisp. Uses the
-     * 1:1 9-arg {@code blit}.
-     */
     private void blitBarCrop(GuiGraphics graphics, int bx, int by, int sourceU, double fraction) {
         int fillH = barFillHeight(fraction);
         if (fillH <= 0) {
             return;
         }
-        int srcV = FILL_V0 + (BAR_H - fillH); // bottom-aligned slice of the coloured interior
+        int srcV = FILL_V0 + (BAR_H - fillH);
         graphics.blit(FILL_TEXTURE, bx, by + (BAR_H - fillH),
                 (float) sourceU, (float) srcV, BAR_W, fillH, FILL_TEX_W, FILL_TEX_H);
     }
 
-    /**
-     * Squashes the whole gauge column into the bottom {@code fraction} of the bar (stretch). Used for the solid
-     * green progress bar. Uses the 11-arg {@code blit} whose destination size is independent of the source size.
-     */
     private void blitBarStretch(GuiGraphics graphics, int bx, int by, int sourceU, double fraction) {
         int fillH = barFillHeight(fraction);
         if (fillH <= 0) {
@@ -188,25 +149,19 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
                 (float) sourceU, (float) FILL_V0, BAR_W, BAR_H, FILL_TEX_W, FILL_TEX_H);
     }
 
-    /** Pixels of a full-height bar that {@code fraction} (clamped to 0..1) fills, rounded to whole pixels. */
     private static int barFillHeight(double fraction) {
         return (int) Math.round(Math.max(0.0, Math.min(1.0, fraction)) * BAR_H);
     }
 
-    // --- Hover tooltips -------------------------------------------------------------------------
-
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
-        // AbstractContainerScreen.render() does NOT draw tooltips itself; concrete screens must invoke this hook
-        // (vanilla AbstractFurnaceScreen.render does the same). Without this call the hovered slot's item tooltip
-        // never renders, which is why the slots looked tooltip-less.
         this.renderTooltip(graphics, mouseX, mouseY);
     }
 
     @Override
     protected void renderTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
-        super.renderTooltip(graphics, mouseX, mouseY); // hovered-slot item tooltip, like every other menu
+        super.renderTooltip(graphics, mouseX, mouseY);
         if (hoverBar(mouseX, mouseY, FUEL_X)) {
             renderFuelTooltip(graphics, mouseX, mouseY);
         } else if (hoverBar(mouseX, mouseY, PROG_X)) {
@@ -216,20 +171,12 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
         }
     }
 
-    /** True when the cursor is inside the vertical bar column whose on-screen left edge is {@code barLeftX}. */
     private boolean hoverBar(int mouseX, int mouseY, int barLeftX) {
         int bx = this.leftPos + barLeftX;
         int by = this.topPos + BAR_Y;
         return mouseX >= bx && mouseX < bx + BAR_W && mouseY >= by && mouseY < by + BAR_H;
     }
 
-    /**
-     * Draws the fuel gauge's two BCE masses as real stacked power towers - the exact renderer the machine items' tooltips
-     * use ({@link ClientTowerTooltip}, reached through {@link TowerListTooltipComponent}) - so a huge log10 mass reads as
-     * {@code 10^(5.01 × 10^14)} with the exponent raised over the base rather than flattened into one glyph run. A
-     * tooltip only carries one custom graphic, so "Stored" and "Required" share it as two stacked rows in a
-     * {@link TowerListTooltipComponent}, and the header stays a normal text line.
-     */
     private void renderFuelTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
         Component title = Component.literal("Base Cobblestone Equivalent").withStyle(ChatFormatting.GOLD);
         List<TowerTooltipComponent> rows = new ArrayList<>(2);
@@ -256,19 +203,35 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
 
     @Override
     protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
-        // Draw the labels ourselves (instead of super) so the "not formed" warning can take over the gap above
-        // the inventory without colliding with the "Inventory" label.
         graphics.drawString(this.font, this.title, this.titleLabelX, this.titleLabelY + 10, TITLE_COLOR, false);
         if (this.menu.formed()) {
             graphics.drawString(this.font, this.playerInventoryTitle,
                     this.inventoryLabelX, this.inventoryLabelY, TITLE_COLOR, false);
         }
-        if (!this.menu.formed()) {
-            Component warning = Component.translatable("container.rcc.compression_core.unformed");
-            int bx = (this.imageWidth - this.font.width(warning)) / 2;
-            graphics.drawString(this.font, warning, bx, this.inventoryLabelY, 0xFFFF8080, false);
+        CraftStatus status = this.menu.status();
+        if (status != CraftStatus.READY && status != CraftStatus.NO_SEED
+                && status != CraftStatus.SEED_TOO_LOW && status != CraftStatus.SEED_AT_CAP) {
+            Component reason = statusLine(status);
+            int bx = (this.imageWidth - this.font.width(reason)) / 2;
+            int by = this.menu.formed() ? this.inventoryLabelY - 11 : this.inventoryLabelY;
+            graphics.drawString(this.font, reason, bx, by, statusColor(status), false);
         }
-        // No goal-tier text label: the decompressor's bordered field sits over the notch baked into its own sheet,
-        // and there is no room beside it (the fuel gauge is to the left) for a "Goal tier:" caption.
+    }
+
+    private static Component statusLine(CraftStatus status) {
+        return switch (status) {
+            case NOT_FORMED -> Component.translatable("container.rcc.compression_core.unformed");
+            case NO_SEED -> Component.empty();
+            case SEED_TOO_LOW -> Component.empty();
+            case SEED_AT_CAP -> Component.empty();
+            case OUTPUT_FULL -> Component.translatable("container.rcc.compression_core.status.output_full");
+            case NEED_FUEL -> Component.translatable("container.rcc.compression_core.status.need_fuel");
+            case NEED_ENERGY -> Component.translatable("container.rcc.compression_core.status.need_energy");
+            case READY -> Component.empty();
+        };
+    }
+
+    private static int statusColor(CraftStatus status) {
+        return status == CraftStatus.NOT_FORMED ? 0xFFFF8080 : 0xFFFFFF55;
     }
 }

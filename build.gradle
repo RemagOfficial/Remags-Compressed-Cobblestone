@@ -47,6 +47,11 @@ repositories {
         name = 'ModMaven'
         url = 'https://modmaven.dev/'
     }
+    // REI (Roughly Enough Items) - the shedaniel maven serves the NeoForge api + full artifacts.
+    maven {
+        name = 'ShedanielMaven'
+        url = 'https://maven.shedaniel.me/'
+    }
     // Storage Drawers (for the creative/infinite storage drawer during multiblock testing).
     // CurseMaven pins an exact file id, so we can select the NeoForge jar.
     // (Modrinth's maven keys on the shared version_number, which served the Fabric build.)
@@ -149,7 +154,20 @@ dependencies {
     // without JEI becoming a hard runtime requirement of the shipped jar.
     localRuntime "mezz.jei:jei-${minecraft_version}-neoforge:19.69.0.456"
     compileOnly "mezz.jei:jei-${minecraft_version}-common-api:19.69.0.456"
-    // compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:19.69.0.456"
+
+    // REI recipe viewer for development/testing only, mirroring the JEI setup above. The REI API is compileOnly so
+    // our custom category/plugins (rei/RccREIPlugin) build against me.shedaniel.rei.api.* without REI becoming a hard
+    // runtime requirement of the shipped jar; the full REI jar + its Cloth Config dependency are localRuntime so the
+    // integration can be exercised in runClient but is NEVER published as an RCC dependency. 16.0.x is REI's 1.21.1 line.
+    // REI 16.0.799 pulls Cloth Config 15.0.130 + Architectury 13.0.6 (per its POM); pinned explicitly here because
+    // transitive mod jars are not reliably placed on the ModDevGradle runtime mod path.
+    // localRuntime "me.shedaniel:RoughlyEnoughItems-neoforge:16.0.799"
+    localRuntime "me.shedaniel.cloth:cloth-config-neoforge:15.0.130"
+    localRuntime "dev.architectury:architectury-neoforge:13.0.6"
+    // compileOnly the FULL neoforge jar (not just -api): it bundles the api, the me.shedaniel.rei.forge.REIPluginClient
+    // discovery annotation and DefaultInformationDisplay, all of which RccREIPlugin compiles against. me.shedaniel.math
+    // (Rectangle) arrives transitively through Cloth Config above.
+    compileOnly "me.shedaniel:RoughlyEnoughItems-neoforge:16.0.799"
 
     // Testing-only multiblock helpers, loaded in runClient via localRuntime (never published as RCC deps):
     //  - Mekanism core provides the Creative Power Cube (infinite FE) to power the Compression Manipulator.

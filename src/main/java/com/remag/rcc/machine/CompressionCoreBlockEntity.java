@@ -32,24 +32,6 @@ import org.jetbrains.annotations.Nullable;
 import java.math.BigInteger;
 import java.util.Objects;
 
-/**
- * Controller of the Compression Manipulator. Holds the seed slot, a base-cobblestone-equivalent fuel-mass
- * pool (kept in log10 space so it stays finite toward a googolplex tier), an FE buffer, the finished-output
- * slot, and the doubling cycle state. The {@link CompressionPortBlockEntity}s forward their capabilities here;
- * this block entity runs the only server ticker.
- *
- * <p>A cycle turns a seed tier {@code n} into {@code 2n} when the structure is {@code formed}, the seed is at
- * least {@link CompressionConfig#MANIPULATOR_MIN_IN}, the step stays within
- * {@link CompressionConfig#MANIPULATOR_MAX_OUT}, enough fuel mass has been fed, and enough FE is stored. On
- * start the seed and the whole fuel pool are consumed and FE drains across the craft.
- *
- * <p>The band ceiling is a <em>hard</em> cap the ladder must still be able to reach. Because
- * {@link CompressionConfig#MANIPULATOR_MAX_OUT} ({@code 10^15}) is not a power-of-two multiple of the smallest seed
- * ({@code 1000}), plain doubling tops out at {@code 1000 * 2^29 = 5.37e14} and could never land on it, so the
- * <em>final</em> craft compresses by <em>less</em> than double and clamps exactly onto the ceiling (see {@link
- * #nextOutputTier}). Its fuel and FE bills are <b>not</b> reduced for that shorter step - over-asking is harmless
- * where precision-loss duplication already makes mass abundant.
- */
 public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvider, ICompressionMachine, IMultiblockController {
     private static final String TAG_SEED = "seed";
     private static final String TAG_OUTPUT = "output";
@@ -58,18 +40,13 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
     private static final String TAG_PROGRESS = "progress";
     private static final String TAG_FORMED = "formed";
     private static final String TAG_PENDING = "pendingResult";
-    /** Update-tag-only key carrying the seed tier the client BER should render as the spinning cube. */
     private static final String TAG_RENDER_SEED = "renderSeed";
-    /** Key for the finished-cycle counter, persisted and synced so the client can pulse once per completion. */
     private static final String TAG_CRAFTS_DONE = "craftsDone";
 
     private static final int RESCAN_INTERVAL = 20;
 
     private final ItemStackHandler seed = new ItemStackHandler(1);
     private final ItemStackHandler output = new ItemStackHandler(1);
-    // Internal FE buffer. Kept as a plain count so the machine can spend it directly: a NeoForge
-    // EnergyStorage with maxExtract 0 would also block its own extractEnergy, so we wrap a receive-only
-    // view for the power port instead.
     private int energy = 0;
     private final IEnergyStorage energyView = new IEnergyStorage() {
         @Override
@@ -79,7 +56,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
         @Override
         public int extractEnergy(int maxExtract, boolean simulate) {
-            return 0; // external actors cannot pull energy back out
+            return 0;
         }
 
         @Override
@@ -103,16 +80,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         }
     };
 
-    /** Accumulated fuel mass in log10-base-cobblestone space; {@link Double#NEGATIVE_INFINITY} means empty. */
     private double fuelPool = Double.NEGATIVE_INFINITY;
-    /**
-     * The BCE face of {@link #fuelPool}, handed to an ITEM_IN port so a pipe can burn BCE as fuel exactly the way a
-     * hopper feeds cobblestone items in - one BCE is one vanilla cobblestone, the same mass the pool already counts
-     * in. A pure sink: {@link IBceStorage#canExtract()} is false, so fuel delivered down a line can never be pulled
-     * back out and a loop cannot launder itself. Accepted <em>partially</em> up to
-     * {@link CompressionConfig#MANIPULATOR_BCE_CAPACITY_LOG}, an effectively-unlimited ceiling matched to the giant
-     * tiers this machine runs at.
-     */
     private final IBceStorage bceFuelView = new IBceStorage() {
         @Override
         public double getBceStoredLog() {
@@ -132,7 +100,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             double free = CompressionConfig.log10subtract(
                     CompressionCoreBlockEntity.this.band().sinkCeilingLog(), CompressionCoreBlockEntity.this.fuelPool);
             if (free == Double.NEGATIVE_INFINITY) {
-                return Double.NEGATIVE_INFINITY; // pool full: nothing a bus pushes will land until it is spent
+                return Double.NEGATIVE_INFINITY;
             }
             double accepted = Math.min(amountLog, free);
             if (!simulate) {
@@ -147,7 +115,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
 
         @Override
         public double extractBce(double amountLog, boolean simulate) {
-            return Double.NEGATIVE_INFINITY; // fuel is one-way
+            return Double.NEGATIVE_INFINITY;
         }
 
         @Override
@@ -160,42 +128,24 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             return false;
         }
     };
-    /** 0 when idle, otherwise counting up to this band's {@link CompressionConfig#craftTicks} cycle length. */
     private int progress = 0;
-    /** Result tier of an in-progress craft, so a reload can finish what it started. */
     @Nullable
     private BigInteger pendingResult = null;
-    /** Whether a valid structure currently surrounds this core; drives machine logic and the GUI, not the model. */
     private boolean formed = false;
 
-    /**
-     * Tier the client should render as the seed cube. Kept equal to the seed across a whole cycle (the slot is
-     * emptied at craft start, but the cube keeps spinning until completion), then cleared. Server-authoritative.
-     */
     @Nullable
     private BigInteger renderSeedTier = null;
-    /** Last {@link #renderSeedTier} pushed to clients, so {@code serverTick} only re-syncs when it actually changes. */
     @Nullable
     private BigInteger syncedRenderSeedTier = null;
-    /** Client-side mirror of {@link #renderSeedTier}, read by {@link com.remag.rcc.client.CompressionCoreRenderer}. */
     @Nullable
     private BigInteger clientSeedTier = null;
 
-    /** Bumped by the server each time a cycle finishes; synced so the client can fire a one-shot completion pulse. */
     private int craftsCompleted = 0;
-    /** Client-side mirror of {@link #craftsCompleted}, refreshed by every update tag. */
     private int clientCraftsDone = 0;
 
-    // --- Client-only render bookkeeping (read/written by client.CompressionCoreRenderer) --------
-    /** Game time before which the next lightning volley is due; staggers the zap storm. */
     public long clientNextZapTick;
-    /**
-     * Completion count the client has already pulsed for; {@code -1} until first sight, so joining a machine that ran
-     * earlier cycles never replays a stale pulse and only a genuine increment lights one off.
-     */
     public int clientPulseBaseline = -1;
 
-    /** Client mirror of the finished-cycle counter; compare against {@link #clientPulseBaseline} to detect one. */
     public int getCraftsCompleted() {
         return this.clientCraftsDone;
     }
@@ -206,23 +156,21 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         super(ModBlockEntities.COMPRESSION_CORE.get(), pos, state);
     }
 
-    /** The progression band this core's block belongs to; drives the shell radius, port floor and tier ceilings. */
     public CompressionBand band() {
         return getBlockState().getBlock() instanceof CompressionCoreBlock core
                 ? core.band() : CompressionBand.BAND_1;
     }
 
-    /** Sweep the capability cache across this band's shell box, not the band-1 default the interface carries. */
     @Override
     public int portShellExtent() {
         return band().shellExtent();
     }
 
-    /**
-     * The core is what makes the shell's ports answer, and a cable or pipe that queried one before this block
-     * existed cached that empty answer (see {@link IMultiblockPortHost#invalidatePortCaps}) - so a Manipulator built
-     * core-last would otherwise never take fuel or power until its chunk reloaded.
-     */
+    @Override
+    public int guiShellRadius() {
+        return band().shellExtent();
+    }
+
     @Override
     public void onLoad() {
         super.onLoad();
@@ -230,8 +178,6 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             IMultiblockPortHost.invalidatePortCaps(this.level, this.worldPosition, this.portShellExtent());
         }
     }
-
-    // --- Capability / GUI accessors ------------------------------------------------------------
 
     public IEnergyStorage getEnergy() {
         return energyView;
@@ -258,26 +204,17 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         return seed;
     }
 
-    // --- IMultiblockController: what the shell ports forward -----------------------------------
-
-    /**
-     * ITEM_IN is a fuel sink (a {@link FuelInsertHandler} that burns fed stacks into {@link #fuelPool}), ITEM_OUT
-     * exposes the finished block, and POWER carries no items.
-     */
     @Override
     @Nullable
     public IItemHandler portItemHandler(PortType type) {
         return switch (type) {
             case ITEM_OUT -> output;
             case ITEM_IN -> new FuelInsertHandler(this);
+            case SEED -> new SeedInsertHandler(seed);
             case POWER -> null;
         };
     }
 
-    /**
-     * Only ITEM_IN carries BCE: the sink-only {@link #bceFuelView}, so an insert-mode pipe end can burn BCE as fuel.
-     * POWER and ITEM_OUT return {@code null} (this machine takes mass in as fuel and only ever emits finished blocks).
-     */
     @Override
     @Nullable
     public IBceStorage portBceHandler(PortType type) {
@@ -301,18 +238,15 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         return CompressionConfig.craftTicks(band());
     }
 
-    /** Seed tier the client BER should render as the spinning cube, or {@code null} when there is nothing to show. */
     @Nullable
     public BigInteger getRenderSeedTier() {
         return clientSeedTier;
     }
 
-    /** True while a cycle is running; the client uses this to decide whether to spin the cube. */
     public boolean isCrafting() {
         return progress > 0;
     }
 
-    /** Current fuel requirement (log10 mass) for the seed in the slot, or 0 when there is no valid seed. */
     public double getRequiredFuel() {
         BigInteger n = seedTier();
         return n == null ? 0.0 : CompressionConfig.requiredMassLog(n);
@@ -327,60 +261,60 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         return stack.getOrDefault(ModDataComponents.COMPRESSION_LEVEL.get(), BigInteger.ONE);
     }
 
-    // --- Fuel intake (driven by ITEM_IN ports) -------------------------------------------------
-
     public static boolean isFuel(ItemStack stack) {
         return ICompressionMachine.isFuel(stack);
     }
 
-    /** Only a compressed-cobblestone item may sit in the seed slot (vanilla cobblestone is fuel-only). */
     public static boolean isSeed(ItemStack stack) {
         return ICompressionMachine.isSeed(stack);
     }
 
-    /**
-     * Add a fed stack's mass to the pool. A tier-{@code t} block is worth {@code 9^(t-1)} base cobblestone and
-     * vanilla cobblestone is worth {@code 1}; a stack of {@code k} of them multiplies that by {@code k}. All
-     * arithmetic is in log10 space so even astronomically large tiers stay representable.
-     */
     public void acceptFuel(ItemStack stack) {
         double massLog;
         if (stack.is(ModItems.COMPRESSED_COBBLESTONE.get())) {
             BigInteger tier = stack.getOrDefault(ModDataComponents.COMPRESSION_LEVEL.get(), BigInteger.ONE);
             massLog = CompressionConfig.tierMassLog(tier);
         } else {
-            massLog = 0.0; // vanilla cobblestone: 9^0 = 1 -> log10 = 0
+            massLog = 0.0;
         }
         massLog += Math.log10(stack.getCount());
         this.fuelPool = CompressionConfig.log10add(this.fuelPool, massLog);
         setChanged();
     }
 
-    // --- Cycle logic ---------------------------------------------------------------------------
-
     private boolean canStart() {
-        if (!formed || progress > 0) {
-            return false;
+        return craftStatus() == CraftStatus.READY;
+    }
+
+    @Override
+    public CraftStatus craftStatus() {
+        if (this.progress > 0) {
+            return CraftStatus.READY;
+        }
+        if (!this.formed) {
+            return CraftStatus.NOT_FORMED;
         }
         BigInteger n = seedTier();
-        if (n == null || n.compareTo(band().minInputTier()) < 0) {
-            return false;
+        if (n == null) {
+            return CraftStatus.NO_SEED;
+        }
+        if (n.compareTo(band().minInputTier()) < 0) {
+            return CraftStatus.SEED_TOO_LOW;
         }
         BigInteger out = nextOutputTier(n);
         if (out == null) {
-            return false; // seed already at the band's hard cap: nothing above it to climb to
+            return CraftStatus.SEED_AT_CAP;
         }
-        // The output slot now accumulates a stack of results, so a craft may start whenever the finished item would
-        // still fit: a same-tier stack merges toward its max size, and only a genuinely full (or foreign-tier) slot
-        // blocks. Ports only ever extract from the output, so it can only shrink mid-cycle - room verified here at the
-        // start is still guaranteed at completion.
-        if (!output.insertItem(0, tierStack(out), true).isEmpty()) {
-            return false;
+        if (!this.output.insertItem(0, tierStack(out), true).isEmpty()) {
+            return CraftStatus.OUTPUT_FULL;
         }
-        if (!(fuelPool >= CompressionConfig.requiredMassLog(n))) {
-            return false;
+        if (!(this.fuelPool >= CompressionConfig.requiredMassLog(n))) {
+            return CraftStatus.NEED_FUEL;
         }
-        return energy >= CompressionConfig.ENERGY_PER_CRAFT;
+        if (this.energy < CompressionConfig.ENERGY_PER_CRAFT) {
+            return CraftStatus.NEED_ENERGY;
+        }
+        return CraftStatus.READY;
     }
 
     private void startCraft() {
@@ -390,17 +324,12 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         }
         BigInteger out = nextOutputTier(n);
         if (out == null) {
-            return; // already at the hard cap; canStart should have refused, but never seed a null result
+            return;
         }
         this.pendingResult = out;
-        // Freeze the render tier NOW, from the seed we are about to consume. This is what guarantees the client
-        // BER has a tier to draw even when the machine never idles (a freshly-loaded, instantly-ready manipulator
-        // starts crafting on its first tick, so syncRenderSeedTier's idle branch would never run otherwise).
         this.renderSeedTier = n;
-        // Consume exactly ONE seed per craft: a stack in the seed slot is a queue, so the rest survive for later
-        // cycles instead of being wiped when only tier n is actually used.
         this.seed.extractItem(0, 1, false);
-        this.fuelPool = Double.NEGATIVE_INFINITY; // the whole pool is spent (overfeed is lost)
+        this.fuelPool = Double.NEGATIVE_INFINITY;
         this.progress = 1;
         setChanged();
         sync();
@@ -409,8 +338,6 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
     private void completeCraft() {
         BigInteger result = this.pendingResult;
         if (result != null) {
-            // Merge into whatever the output slot already holds (same-tier results stack together); canStart only
-            // lets a cycle run when there was room, so this always absorbs the single produced item.
             output.insertItem(0, tierStack(result), false);
         }
         this.pendingResult = null;
@@ -426,8 +353,6 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             be.scanRegion();
         }
         if (be.progress > 0) {
-            // Craft time grows with the band (1.5x per tier above band 1), so both the FE drain rate and the completion
-            // threshold read the same band-aware figure the progress bar shows.
             int craftTicks = CompressionConfig.craftTicks(be.band());
             int perTick = Math.max(1, CompressionConfig.ENERGY_PER_CRAFT / craftTicks);
             be.drainEnergy(Math.min(perTick, be.energy));
@@ -442,11 +367,6 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         be.syncRenderSeedTier();
     }
 
-    /**
-     * Keep {@link #renderSeedTier} in step with the seed that owns the current view: the live seed while idle, or
-     * the cycle's seed (captured at {@link #startCraft} and frozen while crafting) otherwise. Push it to clients
-     * only when it changes so the {@link com.remag.rcc.client.CompressionCoreRenderer} cube appears/updates/disappears.
-     */
     private void syncRenderSeedTier() {
         if (this.progress == 0) {
             this.renderSeedTier = seedTier();
@@ -463,15 +383,6 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         return stack;
     }
 
-    /**
-     * The tier a cycle seeded at {@code n} produces: the ordinary doubling {@code 2n}, <b>except</b> on the rung whose
-     * double would overshoot the band ceiling. {@link CompressionConfig#MANIPULATOR_MAX_OUT} ({@code 10^15}) is not a
-     * clean power-of-two multiple of {@link CompressionConfig#MANIPULATOR_MIN_IN} ({@code 1000}), so doubling alone
-     * would stop at {@code 1000 * 2^29 = 5.37e14} and the ceiling could never be minted; the final craft therefore
-     * compresses by <em>less</em> than double and clamps exactly onto the cap. Returns {@code null} when {@code n} has
-     * already reached (or passed) the cap, so there is nothing above it to climb to. Deliberately <b>not</b> used to
-     * cheapen the final craft's fuel/FE cost - both cycle gates still price off the seed {@code n} as any other rung.
-     */
     @Nullable
     private BigInteger nextOutputTier(BigInteger n) {
         BigInteger cap = band().maxOutputTier();
@@ -482,20 +393,6 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         return doubled.compareTo(cap) > 0 ? cap : doubled;
     }
 
-    // --- Structure validation ------------------------------------------------------------------
-
-    /**
-     * Verify the exact 5x5x5 blueprint around this core and update {@code formed}. Cells are classified by how
-     * many of their coordinates sit on the cube boundary (equal to &plusmn;{@code radius}):
-     * <ul>
-     *   <li>two or three boundary coordinates (edges/corners) must be {@link ModBlocks#FRAME frame};</li>
-     *   <li>exactly one boundary coordinate (face panels) must be {@link ModBlocks#GLASS glass}, a
-     *       {@link ModBlocks#PORT port}, or the {@link ModBlocks#INTERFACE interface};</li>
-     *   <li>no boundary coordinate (the interior 3x3x3) must be air, except this core at the centre.</li>
-     * </ul>
-     * At least one port of each kind is required, and the interface count must be exactly
-     * {@link CompressionConfig#MIN_INTERFACES} to {@link CompressionConfig#MAX_INTERFACES} (the sole GUI entry).
-     */
     public void scanRegion() {
         if (level == null || level.isClientSide()) {
             return;
@@ -511,7 +408,7 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
             for (int dy = -r; dy <= r; dy++) {
                 for (int dz = -r; dz <= r; dz++) {
                     if (dx == 0 && dy == 0 && dz == 0) {
-                        continue; // this core
+                        continue;
                     }
                     BlockPos p = worldPosition.offset(dx, dy, dz);
                     if (!level.isLoaded(p)) {
@@ -529,12 +426,13 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
                         }
                     } else if (boundary == 1) {
                         if (s.is(ModBlocks.GLASS.get())) {
-                            // fine, a face panel
                         } else if (s.is(ModBlocks.PORT.get())) {
                             switch (s.getValue(CompressionPortBlock.PORT_TYPE)) {
                                 case POWER -> power++;
                                 case ITEM_IN -> itemIn++;
                                 case ITEM_OUT -> itemOut++;
+                                case SEED -> {
+                                }
                             }
                         } else if (s.is(ModBlocks.INTERFACE.get())) {
                             interfaces++;
@@ -558,15 +456,6 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         applyFormed(result);
     }
 
-    /**
-     * Locate the core this shell cell belongs to, walking {@link IMultiblockPortHost#CORE_SCAN_OFFSETS} outward from
-     * {@code from} nearest-first. The ordered walk is what lets a band-2 shell find a core three or more blocks away
-     * without a fixed radius per band; the nearest-match order also means a cell wedged between two illegal towers
-     * joins the closer one instead of an arbitrary one. This helper is <em>compressor-specific</em> - it only ever
-     * finds {@code rcc:compression_core}. The {@link CompressionInterfaceBlock} does not use it: one panel serves all
-     * three machines, so it resolves a host of any kind through {@link IMultiblockPortHost#findPortHost} and dispatches
-     * on the type.
-     */
     @Nullable
     public static CompressionCoreBlockEntity findCore(Level level, BlockPos from) {
         for (BlockPos off : IMultiblockPortHost.CORE_SCAN_OFFSETS) {
@@ -581,8 +470,6 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         }
         return null;
     }
-
-    // --- MenuProvider (opened via the interface block) -----------------------------------------
 
     @Override
     public Component getDisplayName() {
@@ -600,16 +487,11 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         }
         this.formed = value;
         setChanged();
-        // Push the flag to clients (for the GUI and any future "is working" visual); the blockstate is unchanged.
         sync();
     }
 
-    // --- Persistence & client sync -------------------------------------------------------------
-
     private void sync() {
         if (level != null && !level.isClientSide()) {
-            // Trigger getUpdatePacket() delivery to tracking clients. The client applies it via onDataPacket, which we
-            // override to route into handleUpdateTag so the render tier updates live (not just on chunk load).
             BlockState state = getBlockState();
             level.sendBlockUpdated(worldPosition, state, state, 3);
         }
@@ -645,15 +527,11 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         this.formed = tag.getBoolean(TAG_FORMED);
         this.craftsCompleted = tag.getInt(TAG_CRAFTS_DONE);
         this.pendingResult = tag.contains(TAG_PENDING) ? new BigInteger(tag.getString(TAG_PENDING)) : null;
-        // Re-derive the render tier after a (re)load. A running craft stores its result as pendingResult = seed << 1,
-        // so the seed the cube should show is pendingResult >> 1. Without this, rejoining mid-craft leaves
-        // renderSeedTier null (its idle branch only runs when progress == 0), so no cube appears until the next craft.
         if (this.pendingResult != null) {
             this.renderSeedTier = this.pendingResult.shiftRight(1);
         }
     }
 
-    /** Only the render/GUI-relevant scalars go to clients; inventories and energy stay server-side. */
     @Override
     public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
@@ -676,12 +554,8 @@ public class CompressionCoreBlockEntity extends BlockEntity implements MenuProvi
         this.clientSeedTier = tag.contains(TAG_RENDER_SEED) ? new BigInteger(tag.getString(TAG_RENDER_SEED)) : null;
     }
 
-    /**
-     * NeoForge's default {@code onDataPacket} applies a live block-entity update packet through
-     * {@code loadWithComponents} -> {@code loadAdditional}, which never reads the client-only render tier. That is why
-     * the cube appeared on chunk load (which uses {@code handleUpdateTag}) but not during a running craft. Route the
-     * packet into {@link #handleUpdateTag} so {@link #clientSeedTier} updates live.
-     */
+    // Live sync path: NeoForge routes the getUpdatePacket() payload here, not through handleUpdateTag (which only
+    // fires on initial chunk load), so forward it to keep the client renderer current while the machine runs.
     @Override
     public void onDataPacket(Connection connection, ClientboundBlockEntityDataPacket packet, HolderLookup.Provider registries) {
         handleUpdateTag(packet.getTag(), registries);

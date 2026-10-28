@@ -1,5 +1,6 @@
 package com.remag.rcc.client;
 
+import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.CompressionConfig;
 import net.minecraft.world.phys.Vec3;
 
@@ -7,32 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Generates the Compression Manipulator's crafting lightning and completion-pulse <em>geometry</em> - jagged bolt
- * polylines and a radial starburst - as plain lists of world-space points. This class draws nothing and knows nothing
- * about rendering; {@link CompressionCoreRenderer} consumes these points and renders them inside its block-entity
- * render pass.
- *
- * <p>Why render in the BER rather than as particles (vanilla, Lodestone or AAA): {@code LevelRenderer.renderLevel}
- * composites in the fixed order opaque -> cutout -> entities -> <em>block entities</em> -> <em>translucent</em> (our
- * glass) -> particles. Anything depth-tested that draws after the glass - which is every particle path - is culled by
- * the glass's depth. Block entities draw <em>before</em> the glass, so whatever they put in the framebuffer is
- * blended over by the translucent panes afterwards (the seed cube is visible through the glass for exactly this
- * reason). Drawing the bolts as BE-pass geometry is therefore the one shader-free, mixin-free, dependency-free way to
- * get them to read as being <em>inside</em> the sealed chamber, while the opaque frame and core still occlude them.
- *
- * <p>A bolt is a random jagged polyline: {@link CompressionConfig#BOLT_STEPS} points walked from the seed cube surface
- * to a random spot on the chamber wall, each interior point pushed sideways so every volley is re-shaped differently -
- * the "random every bolt" quality we wanted to keep. All generation is deterministic-free (uses its own {@link Random});
- * it is called from the client render loop only.
- */
 public final class CompressionEffects {
-    /**
-     * Gap left between a bolt's wall target and the chamber's inner glass face. The interior air spans
-     * {@code 2*compressorRadius - 1} blocks about the core, so its inner wall sits half a block inside the shell;
-     * pulling back a further {@code 0.05} keeps the bolt visibly <em>within</em> the glass rather than embedded in it.
-     * Band 1 ({@code r=2}) yields the historic {@code 1.45}, band 2 ({@code r=3}) a matching {@code 2.45}.
-     */
     private static final double WALL_INSET = 0.55D;
 
     private static final Random RANDOM = new Random();
@@ -40,22 +16,14 @@ public final class CompressionEffects {
     private CompressionEffects() {
     }
 
-    /**
-     * Builds one volley of jagged bolts from the spinning seed cube out to random points on the chamber walls.
-     *
-     * @param centre           world-space centre of the core (block centre)
-     * @param compressorRadius the band's shell half-width, which fixes how far the bolts reach toward the glass
-     * @param seedScale        the band-aware seed-cube side (see {@link CompressionConfig#seedCubeScale}); bolts start
-     *                         on this cube's surface so they read as the (bigger) cube discharging outward
-     * @return one polyline per bolt, in world space; each array is the ordered vertices of that bolt
-     */
-    public static List<Vec3[]> generateBolts(Vec3 centre, int compressorRadius, double seedScale) {
-        List<Vec3[]> bolts = new ArrayList<>(CompressionConfig.BOLTS_PER_ZAP);
+    public static List<Vec3[]> generateBolts(Vec3 centre, CompressionBand band, double seedScale) {
+        int boltsPerZap = CompressionConfig.boltsPerZap(band);
+        int steps = CompressionConfig.boltSteps(band);
+        double jag = CompressionConfig.boltJag(band);
+        List<Vec3[]> bolts = new ArrayList<>(boltsPerZap);
         double cubeRadius = seedScale * 0.5D;
-        double wallHalf = compressorRadius - WALL_INSET;
-        for (int i = 0; i < CompressionConfig.BOLTS_PER_ZAP; i++) {
-            // Pick a point on the inner wall, then start the bolt on the cube surface along that same ray so it reads
-            // as the cube discharging outward rather than two unrelated random points being connected.
+        double wallHalf = band.compressorRadius() - WALL_INSET;
+        for (int i = 0; i < boltsPerZap; i++) {
             Vec3 wall = randomPointOnCubeShell(centre, wallHalf);
             Vec3 outward = wall.subtract(centre);
             double outwardLen = outward.length();
@@ -63,20 +31,13 @@ public final class CompressionEffects {
                 continue;
             }
             Vec3 start = centre.add(outward.scale(cubeRadius / outwardLen));
-            bolts.add(jaggedBolt(start, wall));
+            bolts.add(jaggedBolt(start, wall, steps, jag));
         }
         return bolts;
     }
 
-    /**
-     * Builds the direction set for one completion flash: {@link CompressionConfig#PULSE_BURST} unit vectors radiating
-     * from the core. Only the (fixed) directions are generated here; {@link CompressionCoreRenderer} turns them into an
-     * expanding shell of spokes each frame, so the flash grows outward past the seed cube as it fades.
-     *
-     * @return an array of unit directions, one per flash spoke
-     */
-    public static Vec3[] generatePulseDirections() {
-        int count = Math.max(1, CompressionConfig.PULSE_BURST);
+    public static Vec3[] generatePulseDirections(CompressionBand band) {
+        int count = CompressionConfig.pulseBurst(band);
         Vec3[] dirs = new Vec3[count];
         for (int i = 0; i < count; i++) {
             dirs[i] = randomUnitVector();
@@ -84,30 +45,23 @@ public final class CompressionEffects {
         return dirs;
     }
 
-    /**
-     * A jagged polyline between {@code start} and {@code end} with {@link CompressionConfig#BOLT_STEPS} segments. Interior
-     * vertices are pushed sideways by up to {@link CompressionConfig#BOLT_JAG} blocks (tapered to zero at both endpoints so
-     * the bolt stays anchored cube->wall); that random re-shaping every call is what makes each bolt unique.
-     */
-    private static Vec3[] jaggedBolt(Vec3 start, Vec3 end) {
+    private static Vec3[] jaggedBolt(Vec3 start, Vec3 end, int steps, double jag) {
         Vec3 axis = end.subtract(start);
         double total = axis.length();
         if (total < 1.0E-4D) {
             return new Vec3[]{start, end};
         }
-        int steps = Math.max(1, CompressionConfig.BOLT_STEPS);
+        int segs = Math.max(1, steps);
         Vec3 dir = axis.scale(1.0D / total);
         Vec3 perp1 = perpendicular(dir, 0);
         Vec3 perp2 = perpendicular(dir, 1);
-        double jag = CompressionConfig.BOLT_JAG;
 
-        Vec3[] points = new Vec3[steps + 1];
+        Vec3[] points = new Vec3[segs + 1];
         points[0] = start;
-        for (int s = 1; s <= steps; s++) {
-            double t = (double) s / steps;
+        for (int s = 1; s <= segs; s++) {
+            double t = (double) s / segs;
             Vec3 point = start.add(axis.scale(t));
-            // Only jitter interior points; the sin taper keeps both ends exactly on the cube / wall.
-            if (s < steps && jag > 0.0D) {
+            if (s < segs && jag > 0.0D) {
                 double amt = jag * Math.sin(t * Math.PI);
                 point = point
                         .add(perp1.scale((RANDOM.nextDouble() * 2.0D - 1.0D) * amt))
@@ -118,10 +72,6 @@ public final class CompressionEffects {
         return points;
     }
 
-    /**
-     * A unit vector perpendicular to {@code d}. {@code choice} picks one of the two reference axes so callers get two
-     * independent perpendicular directions spanning the jitter plane.
-     */
     private static Vec3 perpendicular(Vec3 d, int choice) {
         Vec3 a = choice == 0
                 ? (Math.abs(d.x) < 0.9D ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0))
@@ -131,7 +81,6 @@ public final class CompressionEffects {
         return len < 1.0E-6D ? new Vec3(0, 0, 0) : p.scale(1.0D / len);
     }
 
-    /** A uniformly distributed direction on the unit sphere (for the pulse starburst). */
     private static Vec3 randomUnitVector() {
         double z = RANDOM.nextDouble() * 2.0D - 1.0D;
         double theta = RANDOM.nextDouble() * Math.PI * 2.0D;
@@ -139,7 +88,6 @@ public final class CompressionEffects {
         return new Vec3(r * Math.cos(theta), z, r * Math.sin(theta));
     }
 
-    /** A uniformly distributed point on the axis-aligned cube shell of the given half-extent centred on {@code centre}. */
     private static Vec3 randomPointOnCubeShell(Vec3 centre, double half) {
         int axis = RANDOM.nextInt(3);
         double sign = RANDOM.nextBoolean() ? 1.0D : -1.0D;

@@ -19,11 +19,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.math.BigInteger;
 
-/**
- * The one and only compressed cobblestone block. Its {@link BlockEntity} carries the level, so a
- * single registered block covers every compression tier. When placed it copies the level from the
- * item's data component; pick-block reads it back so middle-click gives the correct tier.
- */
 public class CompressedCobblestoneBlock extends Block implements EntityBlock {
 
     public CompressedCobblestoneBlock() {

@@ -2,6 +2,7 @@ package com.remag.rcc.machine;
 
 import com.remag.rcc.registry.ModItemTags;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
@@ -21,33 +22,28 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * A Compression Manipulator connection point. One block serves all three {@link PortType}s via the
- * {@code PORT_TYPE} state: power in, item in (fuel), item out (finished product). The port itself holds
- * no storage — its {@link CompressionPortBlockEntity} forwards to the multiblock core.
- */
 public class CompressionPortBlock extends Block implements EntityBlock {
     public static final EnumProperty<PortType> PORT_TYPE =
             EnumProperty.create("port_type", PortType.class);
 
     public CompressionPortBlock(BlockBehaviour.Properties properties) {
         super(properties);
-        this.registerDefaultState(this.stateDefinition.any().setValue(PORT_TYPE, PortType.POWER));
+        this.registerDefaultState(this.stateDefinition.any()
+                .setValue(PORT_TYPE, PortType.POWER)
+                .setValue(BlockStateProperties.FACING, Direction.NORTH));
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(PORT_TYPE);
+        builder.add(PORT_TYPE, BlockStateProperties.FACING);
     }
 
-    /**
-     * Place the port with the {@link PortType} carried on the held stack's {@code block_state} component,
-     * so the three creative-tab variants (and any automation that copies them) place as the intended kind.
-     */
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
@@ -61,22 +57,31 @@ public class CompressionPortBlock extends Block implements EntityBlock {
                 type = fromItem;
             }
         }
-        return this.defaultBlockState().setValue(PORT_TYPE, type);
+        Player placer = context.getPlayer();
+        return this.defaultBlockState()
+                .setValue(PORT_TYPE, type)
+                .setValue(BlockStateProperties.FACING, placer != null ? facingToward(placer, context.getClickedPos())
+                        : context.getNearestLookingDirection().getOpposite());
     }
 
-    /**
-     * Right-click with any wrench (the shared {@code c:tools/wrench} convention, see
-     * {@link com.remag.rcc.registry.ModItemTags}) cycles this port in place through Power &#8594; Item Input &#8594;
-     * Item Output, with no break and no item consumed - the same contract as {@link BcePipeBlock}'s wrench handling.
-     * The block entity re-reads {@link #PORT_TYPE} from its live state on every capability query, and both cores
-     * rescan their structure periodically, so a re-pointed port starts forwarding the new kind (and the formed flag
-     * notices if the swap broke the "at least one of each kind" rule) without anything else having to be touched.
-     */
+    private static Direction facingToward(Player player, BlockPos pos) {
+        Vec3 toPlayer = player.getEyePosition().subtract(Vec3.atCenterOf(pos));
+        double ax = Math.abs(toPlayer.x);
+        double ay = Math.abs(toPlayer.y);
+        double az = Math.abs(toPlayer.z);
+        if (ay >= ax && ay >= az) {
+            return toPlayer.y > 0.0D ? Direction.UP : Direction.DOWN;
+        } else if (ax >= az) {
+            return toPlayer.x > 0.0D ? Direction.EAST : Direction.WEST;
+        } else {
+            return toPlayer.z > 0.0D ? Direction.SOUTH : Direction.NORTH;
+        }
+    }
+
     @Override
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                               Player player, InteractionHand hand, BlockHitResult hitResult) {
         if (!ModItemTags.isWrench(stack)) {
-            // Not a wrench: no special behaviour, ordinary placement against this port still works.
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
         if (!level.isClientSide()) {
@@ -89,7 +94,6 @@ public class CompressionPortBlock extends Block implements EntityBlock {
         return ItemInteractionResult.sidedSuccess(level.isClientSide());
     }
 
-    /** Advance to the next kind (wrapping at the top): POWER -> ITEM_IN -> ITEM_OUT -> POWER. */
     private static PortType cycle(PortType current) {
         PortType[] all = PortType.values();
         return all[(current.ordinal() + 1) % all.length];
@@ -104,7 +108,6 @@ public class CompressionPortBlock extends Block implements EntityBlock {
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        // Ports are passive; the core drives all ticking.
         return null;
     }
 }

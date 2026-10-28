@@ -26,23 +26,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.math.BigInteger;
 
-/**
- * Controller of the single-block {@link CompressionAutoDecompressorBlock}: the reverse of the Auto-Compressor. It
- * takes a compressed-cobblestone seed plus FE and steps it <em>down</em> one tier at a time until it reaches the
- * player-selected goal tier, depositing the released mass into a {@link IBceStorage BCE} buffer and ejecting the
- * downgraded block to the output slot.
- *
- * <p>Mass is conserved exactly against the compressor: a step {@code t -> t-1} releases {@code 8 * 9^(t-1)} BCE
- * ({@link CompressionConfig#requiredStepMassLog}), scaled by the seed stack size. Decompressing a tier-{@code t0}
- * block to tier {@code g} therefore releases {@code 9^t0 - 9^g} BCE and leaves a tier-{@code g} block worth
- * {@code 9^g}. The buffer's ceiling ({@link CompressionConfig#DECOMP_BCE_CAPACITY_LOG}) is set effectively
- * unlimited while nothing can drain it - the GUI measures the pool against
- * {@link CompressionConfig#DECOMP_BCE_DISPLAY_LOG} instead - so a descent never stalls for lack of room.
- *
- * <p>It drives the shared {@link CompressionCoreMenu}/{@link com.remag.rcc.client.CompressionCoreScreen} (seed slot,
- * output slot, fuel/progress/energy gauges) by implementing {@link ICompressionMachine}; the goal-tier text field is
- * surfaced because it also implements {@link IDecompressTarget}. All logic is server-authoritative.
- */
 public class CompressionAutoDecompressorBlockEntity extends BlockEntity
         implements MenuProvider, ICompressionMachine, IDecompressTarget {
     private static final String TAG_SEED = "seed";
@@ -54,10 +37,8 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
 
     private final ItemStackHandler seed = new ItemStackHandler(1);
     private final ItemStackHandler output = new ItemStackHandler(1);
-    // Seed-in / output-out view exposed on every face; the BCE product leaves through the separate bceView cap.
     private final DecompressorItemHandler itemHandler = new DecompressorItemHandler(this);
 
-    // FE buffer kept as a plain count; the exposed view is receive-only (see the compressor for why we wrap a view).
     private int energy = 0;
     private final IEnergyStorage energyView = new IEnergyStorage() {
         @Override
@@ -67,7 +48,7 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
 
         @Override
         public int extractEnergy(int maxExtract, boolean simulate) {
-            return 0; // automation cannot pull energy back out
+            return 0;
         }
 
         @Override
@@ -91,14 +72,10 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
         }
     };
 
-    /** Accumulated BCE output in log10 space; {@link Double#NEGATIVE_INFINITY} means empty. */
     private double bcePool = Double.NEGATIVE_INFINITY;
-    /** The tier the seed is decompressed down to. */
     private BigInteger goalTier = BigInteger.ZERO;
-    /** 0 when idle, otherwise counting up to {@link CompressionConfig#AUTO_TICKS_PER_STEP}. */
     private int progress = 0;
 
-    /** The BCE buffer as a sided capability view (extractable by future pipes). */
     private final IBceStorage bceView = new IBceStorage() {
         @Override
         public double getBceStoredLog() {
@@ -118,7 +95,7 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
             double result = CompressionConfig.log10add(
                     CompressionAutoDecompressorBlockEntity.this.bcePool, amountLog);
             if (result > CompressionConfig.DECOMP_BCE_CAPACITY_LOG) {
-                return Double.NEGATIVE_INFINITY; // would overflow the buffer
+                return Double.NEGATIVE_INFINITY;
             }
             if (!simulate) {
                 CompressionAutoDecompressorBlockEntity.this.bcePool = result;
@@ -136,7 +113,7 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
             if (pool == Double.NEGATIVE_INFINITY) {
                 return Double.NEGATIVE_INFINITY;
             }
-            double take = Math.min(amountLog, pool); // withdraw up to what is present
+            double take = Math.min(amountLog, pool);
             if (!simulate) {
                 CompressionAutoDecompressorBlockEntity.this.bcePool = CompressionConfig.log10subtract(pool, take);
                 setChanged();
@@ -158,8 +135,6 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
     public CompressionAutoDecompressorBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.COMPRESSION_AUTO_DECOMPRESSOR.get(), pos, state);
     }
-
-    // --- ICompressionMachine / IDecompressTarget / capability accessors ------------------------
 
     @Override
     public ItemStackHandler getSeed() {
@@ -194,28 +169,21 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
         return CompressionConfig.AUTO_TICKS_PER_STEP;
     }
 
-    /** The fuel gauge is repurposed to read as BCE buffer fill. */
     @Override
     public double getFuelPool() {
         return bcePool;
     }
 
-    /**
-     * The gauge's denominator: the tier-1000 display quantum ({@link CompressionConfig#DECOMP_BCE_DISPLAY_LOG}).
-     * The real capacity is effectively unlimited and would leave the bar pinned at 0%.
-     */
     @Override
     public double getRequiredFuel() {
         return CompressionConfig.DECOMP_BCE_DISPLAY_LOG;
     }
 
-    /** A single block is always ready; there is no surrounding structure to validate. */
     @Override
     public boolean isFormed() {
         return true;
     }
 
-    /** The decompressor does not burn fuel; a fed stack is converted straight into BCE mass. */
     @Override
     public void acceptFuel(ItemStack stack) {
         if (stack.isEmpty()) {
@@ -226,7 +194,7 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
             BigInteger tier = stack.getOrDefault(ModDataComponents.COMPRESSION_LEVEL.get(), BigInteger.ONE);
             massLog = CompressionConfig.bceMassLog(tier);
         } else {
-            massLog = 0.0; // vanilla cobblestone = 1 BCE (9^0) -> log10 = 0
+            massLog = 0.0;
         }
         massLog += Math.log10(stack.getCount());
         this.bceView.receiveBce(massLog, false);
@@ -266,12 +234,11 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
     private BigInteger seedTier() {
         ItemStack stack = seed.getStackInSlot(0);
         if (stack.isEmpty() || !stack.is(ModItems.COMPRESSED_COBBLESTONE.get())) {
-            return null; // only a compressed block is a valid seed (vanilla has nothing to decompress)
+            return null;
         }
         return stack.getOrDefault(ModDataComponents.COMPRESSION_LEVEL.get(), BigInteger.ONE);
     }
 
-    /** log10 BCE the next step would release for the whole seed stack: per-unit differential scaled by stack size. */
     private double releaseMassLog() {
         BigInteger t = seedTier();
         if (t == null || t.signum() <= 0) {
@@ -281,8 +248,6 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
         double perUnit = CompressionConfig.requiredStepMassLog(t.subtract(BigInteger.ONE));
         return count > 1 ? perUnit + Math.log10(count) : perUnit;
     }
-
-    // --- Cycle logic ---------------------------------------------------------------------------
 
     public static void serverTick(Level level, BlockPos pos, BlockState state, CompressionAutoDecompressorBlockEntity be) {
         if (be.progress > 0) {
@@ -305,18 +270,15 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
         }
         BigInteger t = seedTier();
         if (t == null || t.compareTo(goalTier) <= 0) {
-            return false; // no seed, or already at/below the goal tier
+            return false;
         }
         if (energy < CompressionConfig.AUTO_ENERGY_PER_STEP) {
             return false;
         }
-        // Safety net, not a gameplay gate: the capacity is effectively unlimited, so this only rejects a corrupt
-        // pool (NaN/Infinity from a bad save or a misbehaving pipe) rather than ever pausing a legit descent.
         double release = releaseMassLog();
         if (!(CompressionConfig.log10add(bcePool, release) <= CompressionConfig.DECOMP_BCE_CAPACITY_LOG)) {
             return false;
         }
-        // Only the final step (reaching the goal) ejects an item; require output room for the whole seed stack then.
         if (t.subtract(BigInteger.ONE).compareTo(goalTier) <= 0) {
             ItemStack probe = stackForTier(t.subtract(BigInteger.ONE));
             probe.setCount(seed.getStackInSlot(0).getCount());
@@ -340,18 +302,17 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
         this.bcePool = CompressionConfig.log10add(this.bcePool, release);
 
         BigInteger next = t.subtract(BigInteger.ONE);
-        ItemStack result = stackForTier(next); // tier 0 becomes a vanilla cobblestone
+        ItemStack result = stackForTier(next);
         result.setCount(seedCount);
         this.seed.extractItem(0, seedCount, false);
         if (next.compareTo(goalTier) > 0) {
-            this.seed.insertItem(0, result, false); // still above the goal: keep decompressing in place
+            this.seed.insertItem(0, result, false);
         } else {
-            this.output.insertItem(0, result, false); // reached the goal: eject the downgraded block
+            this.output.insertItem(0, result, false);
         }
         setChanged();
     }
 
-    /** A one-unit stack for the given tier: vanilla cobblestone at tier 0, otherwise a tiered compressed block. */
     private static ItemStack stackForTier(BigInteger tier) {
         if (tier.signum() <= 0) {
             return new ItemStack(Items.COBBLESTONE);
@@ -360,8 +321,6 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
         stack.set(ModDataComponents.COMPRESSION_LEVEL.get(), tier);
         return stack;
     }
-
-    // --- MenuProvider (opened directly on the block) -------------------------------------------
 
     @Override
     public Component getDisplayName() {
@@ -372,8 +331,6 @@ public class CompressionAutoDecompressorBlockEntity extends BlockEntity
     public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {
         return new CompressionCoreMenu(containerId, playerInventory, this);
     }
-
-    // --- Persistence ---------------------------------------------------------------------------
 
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {

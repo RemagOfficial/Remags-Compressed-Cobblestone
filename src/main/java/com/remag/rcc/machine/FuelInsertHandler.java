@@ -3,11 +3,6 @@ package com.remag.rcc.machine;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.items.IItemHandler;
 
-/**
- * A single-slot, insert-only view of a {@link CompressionCoreBlockEntity} presented by an ITEM_IN port. Feeding
- * any fuel stack adds its base-cobblestone-equivalent mass to the core's log10 pool and consumes the whole
- * stack; nothing can be extracted back out (mass, once compressed into the pool, is spent).
- */
 public class FuelInsertHandler implements IItemHandler {
     private final CompressionCoreBlockEntity core;
 
@@ -28,12 +23,12 @@ public class FuelInsertHandler implements IItemHandler {
     @Override
     public ItemStack insertItem(int slot, ItemStack stack, boolean simulate) {
         if (!CompressionCoreBlockEntity.isFuel(stack)) {
-            return stack; // not fuel: reject the whole stack as leftover
+            return stack;
         }
         if (!simulate) {
             core.acceptFuel(stack);
         }
-        return ItemStack.EMPTY; // accepted entirely (a fuel sink has no visible contents)
+        return ItemStack.EMPTY;
     }
 
     @Override

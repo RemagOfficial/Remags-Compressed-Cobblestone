@@ -5,11 +5,6 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 
-/**
- * Serializer for {@link DecompressRecipe}. Stateless like {@link CompressRecipeSerializer}: the source
- * tier is read from the single grid item at craft time, so the recipe JSON is just
- * {@code {"type": "rcc:decompress"}}.
- */
 public class DecompressRecipeSerializer implements RecipeSerializer<DecompressRecipe> {
     private static final DecompressRecipe PROTOTYPE = new DecompressRecipe();
 

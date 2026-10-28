@@ -22,17 +22,6 @@ import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * A cobblestone generator - the mass source that gates the entire compression progression. One block covers the whole
- * ladder via a {@link GeneratorTier} block-state property (the same single-block-multi-variant shape as
- * {@link BcePipeBlock}): the rung decides the per-second output and whether it is delivered as cobblestone
- * <em>items</em> or raw <em>BCE</em>.
- *
- * <p>It has no GUI. All it does is mint mass on the server tick (see {@link CobblestoneGeneratorBlockEntity}), which
- * automation reaches through the standard item / {@code rcc:bce} capabilities. Sneak-right-clicking it cycles its
- * rung in-place and prints the current output - a development convenience for inspecting each tier before per-tier
- * items, models and recipes exist (those come in the recipes/assets phase).
- */
 public class CobblestoneGeneratorBlock extends Block implements EntityBlock {
     public static final EnumProperty<GeneratorTier> TIER = EnumProperty.create("tier", GeneratorTier.class);
 
@@ -52,11 +41,6 @@ public class CobblestoneGeneratorBlock extends Block implements EntityBlock {
         builder.add(TIER);
     }
 
-    /**
-     * Place on the rung carried on the held stack's {@code block_state} component (the creative-tab per-tier entries
-     * and any copied stack), defaulting to {@link GeneratorTier#BASE} when the stack names none - the same trick as
-     * {@link BcePipeBlock#getStateForPlacement}.
-     */
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
@@ -74,7 +58,6 @@ public class CobblestoneGeneratorBlock extends Block implements EntityBlock {
     @Nullable
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        // Generation is server-authoritative; the client needs no ticker.
         return level.isClientSide() ? null
                 : createTickerHelper(type, ModBlockEntities.COBBLESTONE_GENERATOR.get(),
                 CobblestoneGeneratorBlockEntity::serverTick);
@@ -90,7 +73,6 @@ public class CobblestoneGeneratorBlock extends Block implements EntityBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                Player player, BlockHitResult hit) {
-        // Only the sneak gesture does anything; otherwise leave the block for placing pipes/hoppers against it.
         if (!player.isSecondaryUseActive()) {
             return InteractionResult.PASS;
         }
@@ -109,7 +91,6 @@ public class CobblestoneGeneratorBlock extends Block implements EntityBlock {
         return InteractionResult.PASS;
     }
 
-    /** Advance to the next rung (wrapping at the top) so a test click walks the whole ladder. */
     private static GeneratorTier cycle(GeneratorTier current) {
         GeneratorTier[] all = GeneratorTier.values();
         return all[(current.ordinal() + 1) % all.length];

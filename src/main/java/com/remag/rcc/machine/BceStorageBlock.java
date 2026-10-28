@@ -2,48 +2,61 @@ package com.remag.rcc.machine;
 
 import com.remag.rcc.registry.CompressionConfig;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * A standalone BCE tank block. Passive by design: it never ticks, all flow is driven by the
- * {@link com.remag.rcc.energy.BceNetwork} that touches it, exactly like the multiblock's
- * {@link CompressionPortBlock} defers to the core.
- *
- * <p>One class covers the whole tank ladder: the capacity (log10 BCE) is a constructor parameter, so
- * {@code BCE Storage} (one tier-1000 block, {@link CompressionConfig#BCE_STORAGE_CAPACITY_LOG}) and
- * {@code BCE Storage II} (one tier-{@link CompressionConfig#MANIPULATOR_MAX_OUT} block,
- * {@link CompressionConfig#BCE_STORAGE_2_CAPACITY_LOG}) are two registrations of this block sharing one
- * {@link BceStorageBlockEntity} type - the entity simply asks its block how big its pool is.
- *
- * <p>Interaction is deliberately minimal (no GUI, no new menu): sneak-right-click prints the stored amount in chat,
- * anything else returns {@link InteractionResult#PASS} so the block never gets in the way of placing pipes against it
- * or of other mods' automation reaching its {@link com.remag.rcc.energy.IBceStorage} capability.
- */
 public class BceStorageBlock extends Block implements EntityBlock {
 
-    /** Ceiling of this tank's pool, in log10 BCE. */
     private final double capacityLog;
+
+    private final boolean infiniteSource;
 
     public BceStorageBlock(BlockBehaviour.Properties properties) {
         this(properties, CompressionConfig.BCE_STORAGE_CAPACITY_LOG);
     }
 
     public BceStorageBlock(BlockBehaviour.Properties properties, double capacityLog) {
+        this(properties, capacityLog, false);
+    }
+
+    public BceStorageBlock(BlockBehaviour.Properties properties, double capacityLog, boolean infiniteSource) {
         super(properties);
         this.capacityLog = capacityLog;
+        this.infiniteSource = infiniteSource;
+        this.registerDefaultState(this.stateDefinition.any()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH));
     }
 
     public double getCapacityLog() {
         return this.capacityLog;
+    }
+
+    @Override
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+        builder.add(BlockStateProperties.HORIZONTAL_FACING);
+    }
+
+    @Nullable
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        return this.defaultBlockState()
+                .setValue(BlockStateProperties.HORIZONTAL_FACING, context.getHorizontalDirection().getOpposite());
+    }
+
+    public boolean isInfiniteSource() {
+        return this.infiniteSource;
     }
 
     @Nullable
@@ -56,7 +69,7 @@ public class BceStorageBlock extends Block implements EntityBlock {
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                Player player, BlockHitResult hit) {
         if (!player.isSecondaryUseActive()) {
-            return InteractionResult.PASS; // only the sneak gesture reports; otherwise leave the block alone
+            return InteractionResult.PASS;
         }
         if (level.isClientSide()) {
             return InteractionResult.CONSUME;

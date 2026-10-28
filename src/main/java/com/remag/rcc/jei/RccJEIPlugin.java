@@ -8,26 +8,20 @@ import com.remag.rcc.registry.ModDataComponents;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.helpers.IGuiHelper;
+import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * JEI integration for the dynamic compression recipes.
- *
- * <p>Our {@link com.remag.rcc.recipe.CompressRecipe compress}/{@link com.remag.rcc.recipe.DecompressRecipe decompress}
- * recipes have custom serializers and are tier-agnostic, so JEI's vanilla crafting category neither picks them up
- * nor knows what tier to draw. This plugin registers a dedicated {@link CompressionCategory} and feeds it a few
- * concrete example tiers, which communicate the "3x3 of tier N -> tier N+1" and "tier N -> 9x tier N-1" mechanic
- * that applies to every level.
- */
 @JeiPlugin
 public class RccJEIPlugin implements IModPlugin {
 
@@ -50,13 +44,24 @@ public class RccJEIPlugin implements IModPlugin {
         registerInfo(registration);
     }
 
-    /**
-     * The real recipes are tier-agnostic and the manipulator is block-entity driven, so the categories can only
-     * ever show a couple of illustrative examples - which reads as "only these tiers exist". These info pages
-     * (opened with the {@code i} key on an item) document the actual processes and make clear the mechanic applies
-     * to every tier. {@code addIngredientInfo} keys on the base item, so the compressed-cobblestone page shows for
-     * every compression level, not just the example stacks.
-     */
+    @Override
+    public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
+        registration.addRecipeCatalyst(Blocks.CRAFTING_TABLE, CompressionCategory.TYPE);
+        for (Item core : allCompressionCores()) {
+            registration.addRecipeCatalyst(core, ManipulatorCategory.TYPE);
+        }
+    }
+
+    private static List<Item> allCompressionCores() {
+        List<Item> cores = new ArrayList<>();
+        cores.add(ModItems.COMPRESSION_CORE.get());
+        cores.add(ModItems.COMPRESSION_CORE_2.get());
+        for (var deferred : ModItems.COMPRESSION_CORES_BY_BAND.values()) {
+            cores.add(deferred.get());
+        }
+        return cores;
+    }
+
     private static void registerInfo(IRecipeRegistration registration) {
         registration.addIngredientInfo(ModItems.COMPRESSED_COBBLESTONE.get(),
                 Component.translatable("jei.rcc.info.compressed.line1"),
@@ -85,7 +90,7 @@ public class RccJEIPlugin implements IModPlugin {
         recipes.add(compressExample(BigInteger.valueOf(3)));
         recipes.add(decompressExample(BigInteger.valueOf(3)));
         recipes.add(decompressExample(BigInteger.TWO));
-        recipes.add(decompressExample(BigInteger.ONE)); // level 1 unfolds back to vanilla cobblestone
+        recipes.add(decompressExample(BigInteger.ONE));
         return recipes;
     }
 
@@ -111,12 +116,6 @@ public class RccJEIPlugin implements IModPlugin {
         return stack;
     }
 
-    /**
-     * The doubling cycle illustrated on the two smallest accepted seeds of <em>each</em> shipped structure band:
-     * band 1 shows 1000 -> 2000 and 2000 -> 4000, band 2 shows 10^15 -> 2*10^15 and its next step up. Fuel is the
-     * log10 base-cobblestone mass the machine must be fed for that seed. Driven off the band table so a new band's
-     * cores automatically earn their own examples.
-     */
     private static List<ManipulatorDisplayRecipe> buildManipulatorExamples() {
         List<ManipulatorDisplayRecipe> recipes = new ArrayList<>();
         for (CompressionBand band : new CompressionBand[]{CompressionBand.BAND_1, CompressionBand.BAND_2}) {
@@ -128,7 +127,7 @@ public class RccJEIPlugin implements IModPlugin {
     }
 
     private static ManipulatorDisplayRecipe manipulatorExample(BigInteger seedTier) {
-        BigInteger outTier = seedTier.shiftLeft(1); // 2n
+        BigInteger outTier = seedTier.shiftLeft(1);
         return new ManipulatorDisplayRecipe(
                 levelStack(seedTier),
                 levelStack(outTier),
