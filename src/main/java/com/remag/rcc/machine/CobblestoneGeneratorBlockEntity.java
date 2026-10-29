@@ -112,11 +112,6 @@ public class CobblestoneGeneratorBlockEntity extends BlockEntity implements IGen
         return tier;
     }
 
-    public void onTierChanged(BlockState state) {
-        this.tier = readTier(state);
-        setChanged();
-    }
-
     private static GeneratorTier readTier(BlockState state) {
         return state.getOptionalValue(CobblestoneGeneratorBlock.TIER).orElse(GeneratorTier.BASE);
     }

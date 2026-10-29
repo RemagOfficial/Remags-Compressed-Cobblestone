@@ -100,6 +100,17 @@ versionRange="[1.21.1-92,)"
 ordering="AFTER"
 side="BOTH"
 
+# ProjectE is deliberately INCOMPATIBLE. Its EMC/value system lets players convert or duplicate items freely,
+# which collapses the cobblestone-compression ladder this mod's entire progression is built on. type="incompatible"
+# (any version) makes the launcher refuse to start when ProjectE is present, so packs must drop one or the other.
+[[dependencies.${mod_id}]]
+modId="projecte"
+type="incompatible"
+versionRange="[0,)"
+ordering="NONE"
+side="BOTH"
+reason="ProjectE's free item-to-EMC conversion bypasses the compression progression RCC is built around."
+
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares
 # that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't
 # stop your mod loading on the server for example.

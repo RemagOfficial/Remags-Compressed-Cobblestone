@@ -4,7 +4,8 @@
   "package": "com.remag.rcc.client.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "AdvancementWidgetMixin"
+    "AdvancementWidgetMixin",
+    "MachineItemBadgeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

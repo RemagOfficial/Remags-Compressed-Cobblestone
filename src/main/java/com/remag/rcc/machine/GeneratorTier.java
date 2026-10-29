@@ -60,8 +60,13 @@ public enum GeneratorTier implements StringRepresentable {
         return rateLog10PerSec() <= Math.log10(CompressionConfig.GEN_ITEM_OUTPUT_LIMIT);
     }
 
+    // Item rungs price upward from the tier-5 unlock milestone (Base=5, then one gate per rung); BCE rungs
+    // gate at their own exponent, so the whole ladder stays monotonic (5,6,7,8,9,10,50,...).
     public int gateCobblestoneTier() {
-        return this == BASE ? CompressionConfig.GEN_BASE_GATE_TIER : this.tierExponent;
+        if (outputIsItems()) {
+            return CompressionConfig.GEN_BASE_GATE_TIER + ordinal();
+        }
+        return this.tierExponent;
     }
 
     public String describe() {
@@ -94,7 +99,7 @@ public enum GeneratorTier implements StringRepresentable {
             return "Base";
         }
         if (outputIsItems()) {
-            return DisplayNames.tupleWord(tierExponent) + "-tuple";
+            return DisplayNames.roman(ordinal());
         }
         return "BCE Tier " + tierExponent;
     }

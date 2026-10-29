@@ -35,7 +35,7 @@ public class CompressRecipe implements CraftingRecipe {
         }
         BigInteger shared = null;
         for (ItemStack stack : items) {
-            if (stack.isEmpty() || stack.getCount() != 1) {
+            if (stack.isEmpty()) {
                 return false;
             }
             if (!stack.is(ModItems.COMPRESSED_COBBLESTONE.get())) {
@@ -68,6 +68,14 @@ public class CompressRecipe implements CraftingRecipe {
     @Override
     public boolean canCraftInDimensions(int width, int height) {
         return width >= 3 && height >= 3;
+    }
+
+    // The tier lives in a data component, so this recipe cannot be shown as a static transferable
+    // ingredient grid: hiding it from the vanilla recipe book stops its auto-fill from grabbing
+    // mixed-tier/stacked items and mis-crafting. Manual crafting (and the custom viewer categories) still work.
+    @Override
+    public boolean isSpecial() {
+        return true;
     }
 
     @Override

@@ -221,13 +221,7 @@ public class CompressionCoreScreen extends AbstractContainerScreen<CompressionCo
     private static Component statusLine(CraftStatus status) {
         return switch (status) {
             case NOT_FORMED -> Component.translatable("container.rcc.compression_core.unformed");
-            case NO_SEED -> Component.empty();
-            case SEED_TOO_LOW -> Component.empty();
-            case SEED_AT_CAP -> Component.empty();
-            case OUTPUT_FULL -> Component.translatable("container.rcc.compression_core.status.output_full");
-            case NEED_FUEL -> Component.translatable("container.rcc.compression_core.status.need_fuel");
-            case NEED_ENERGY -> Component.translatable("container.rcc.compression_core.status.need_energy");
-            case READY -> Component.empty();
+            case NO_SEED, OUTPUT_FULL, SEED_AT_CAP, SEED_TOO_LOW, NEED_FUEL, NEED_ENERGY, READY -> Component.empty();
         };
     }
 

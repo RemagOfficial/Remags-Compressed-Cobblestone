@@ -7,11 +7,13 @@ import com.remag.rcc.item.ModItems;
 import com.remag.rcc.menu.CompressionCoreMenu;
 import com.remag.rcc.registry.CompressionBand;
 import com.remag.rcc.registry.CompressionConfig;
+import com.remag.rcc.registry.DisplayNames;
 import com.remag.rcc.registry.ModDataComponents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -454,7 +456,17 @@ public class DecompressorCoreBlockEntity extends BlockEntity
 
     @Override
     public Component getDisplayName() {
-        return Component.translatable("container.rcc.decompression_core");
+        return bandedTitle("container.rcc.decompression_core");
+    }
+
+    // Header shows which band this multiblock is, so different-tier machines are distinguishable at a glance.
+    private Component bandedTitle(String key) {
+        MutableComponent title = Component.translatable(key);
+        String numeral = DisplayNames.bandNumeral(band());
+        if (!numeral.isEmpty()) {
+            title.append(" " + numeral);
+        }
+        return title;
     }
 
     @Override

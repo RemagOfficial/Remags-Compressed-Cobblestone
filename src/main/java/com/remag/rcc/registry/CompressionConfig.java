@@ -4,8 +4,6 @@ import java.math.BigInteger;
 
 public final class CompressionConfig {
     public static final BigInteger MANUAL_MAX_LEVEL = CompressionBand.BAND_0.maxOutputTier();
-    public static final BigInteger MANIPULATOR_MIN_IN = CompressionBand.BAND_1.minInputTier();
-    public static final BigInteger MANIPULATOR_MAX_OUT = CompressionBand.BAND_1.maxOutputTier();
 
     public static final float TINT_BASE_GREY = 177f / 255f;
     public static final int[] TINT_ANCHOR_ARGB = {
@@ -56,17 +54,14 @@ public final class CompressionConfig {
     public static final double SINK_HEADROOM_RELATIVE = 1.0E-3D;
     public static final double UNLIMITED_SINK_FLOOR_LOG = 1.0E18D;
 
-    public static final int REGION_RADIUS = CompressionBand.BAND_1.compressorRadius();
     public static final int ENERGY_CAPACITY = 1_000_000;
     public static final int ENERGY_PER_CRAFT = 250_000;
-    public static final int TICKS_PER_CRAFT = 240;
-    public static final double CRAFT_SLOWDOWN_PER_BAND = 1.0D;
-    public static final int MIN_POWER_PORTS = CompressionBand.BAND_1.minPowerPorts();
+    public static final int TICKS_PER_CRAFT = 2400;
+    public static final double CRAFT_SLOWDOWN_PER_BAND = 1.5D;
     public static final int MIN_ITEM_IN_PORTS = 1;
     public static final int MIN_ITEM_OUT_PORTS = 1;
     public static final int MIN_INTERFACES = 1;
     public static final int MAX_INTERFACES = 1;
-    public static final double MANIPULATOR_BCE_CAPACITY_LOG = CompressionBand.BAND_1.sinkCeilingLog();
 
     public static final BigInteger AUTO_TARGET_LEVEL = MANUAL_MAX_LEVEL;
     public static final int AUTO_TICKS_PER_STEP = 5;
@@ -76,15 +71,9 @@ public final class CompressionConfig {
     public static final double DECOMP_BCE_CAPACITY_LOG = CompressionBand.TOP.sinkCeilingLog();
     public static final double DECOMP_BCE_DISPLAY_LOG = bceMassLog(AUTO_TARGET_LEVEL);
 
-    public static final int DECOMP_REGION_RADIUS = CompressionBand.BAND_1.decompressorRadius();
     public static final int DECOMP_MULTIBLOCK_TICKS_PER_STEP = 1;
     public static final int DECOMP_MULTIBLOCK_ENERGY_PER_STEP = AUTO_ENERGY_PER_STEP;
 
-    public static final int GEN1_BASE_ENERGY_PER_TICK = (int) CompressionBand.BAND_1.baseEnergyPerTick();
-    public static final int GEN1_REGION_RADIUS = CompressionBand.BAND_1.generatorHalfWidth();
-    public static final int GEN1_LAYERS_BELOW = CompressionBand.BAND_1.generatorLayersBelow();
-    public static final int GEN1_LAYERS_ABOVE = CompressionBand.BAND_1.generatorLayersAbove();
-    public static final int MIN_GEN1_POWER_PORTS = CompressionBand.BAND_1.minPowerPorts();
     public static final int EXACT_GEN1_BCE_OUT_PORTS = 1;
 
     public static final double[] BCE_PIPE_MAX_TRANSFER_LOG =
@@ -111,8 +100,6 @@ public final class CompressionConfig {
     }
 
     public static final int GEN_BASE_COBBLES_PER_SEC = 40;
-    public static final int GEN_MAX_TIER_EXPONENT = 500;
-    public static final int[] GEN_MILESTONE_EXPONENTS = {10, 50, 100, 150, 200, 250, 300, 350, 400, 450, 500};
     public static final double GEN_ITEM_OUTPUT_LIMIT = 2147483647.0D;
     public static final int GEN_BASE_GATE_TIER = 5;
     public static double generatorRateLog10PerSec(int tierExponent) {

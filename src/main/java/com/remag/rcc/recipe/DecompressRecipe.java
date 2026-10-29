@@ -34,7 +34,7 @@ public class DecompressRecipe implements CraftingRecipe {
                 single = stack;
             }
         }
-        if (single == null || single.getCount() != 1) {
+        if (single == null) {
             return false;
         }
         return single.is(ModItems.COMPRESSED_COBBLESTONE.get());
@@ -58,6 +58,13 @@ public class DecompressRecipe implements CraftingRecipe {
 
     @Override
     public boolean canCraftInDimensions(int width, int height) {
+        return true;
+    }
+
+    // Tier lives in a data component, so this cannot be a static recipe-book grid; keep it out of the
+    // book's auto-fill (which would mis-place stacked/mixed items) while leaving manual crafting intact.
+    @Override
+    public boolean isSpecial() {
         return true;
     }
 

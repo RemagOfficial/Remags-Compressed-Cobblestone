@@ -80,19 +80,11 @@ public class CobblestoneGeneratorBlock extends Block implements EntityBlock {
             return InteractionResult.CONSUME;
         }
         if (level.getBlockEntity(pos) instanceof CobblestoneGeneratorBlockEntity gen) {
-            GeneratorTier next = cycle(state.getValue(TIER));
-            level.setBlock(pos, state.setValue(TIER, next), Block.UPDATE_ALL);
-            gen.onTierChanged(level.getBlockState(pos));
-            player.displayClientMessage(Component.translatable("chat.rcc.generator.cycled",
-                    Component.literal(next.getSerializedName()).withStyle(ChatFormatting.GOLD),
+            player.displayClientMessage(Component.translatable("chat.rcc.generator.status",
+                    Component.literal(state.getValue(TIER).displaySuffix()).withStyle(ChatFormatting.GOLD),
                     Component.literal(gen.contentsSummary()).withStyle(ChatFormatting.GRAY)), false);
             return InteractionResult.SUCCESS;
         }
         return InteractionResult.PASS;
-    }
-
-    private static GeneratorTier cycle(GeneratorTier current) {
-        GeneratorTier[] all = GeneratorTier.values();
-        return all[(current.ordinal() + 1) % all.length];
     }
 }

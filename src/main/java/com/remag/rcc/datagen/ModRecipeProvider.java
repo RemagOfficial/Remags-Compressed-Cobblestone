@@ -5,6 +5,7 @@ import com.remag.rcc.block.ModBlocks;
 import com.remag.rcc.item.ModItems;
 import com.remag.rcc.machine.BcePipeBlock;
 import com.remag.rcc.machine.BcePipeTier;
+import com.remag.rcc.machine.CobblestoneGeneratorBlock;
 import com.remag.rcc.machine.GeneratorCoreBlock;
 import com.remag.rcc.machine.GeneratorCoreTier;
 import com.remag.rcc.machine.GeneratorTier;
@@ -99,18 +100,26 @@ public class ModRecipeProvider extends RecipeProvider implements IConditionBuild
 
     
     private void buildGeneratorRecipes(RecipeOutput pWriter) {
-        for (GeneratorTier tier : GeneratorTier.values()) {
+        GeneratorTier[] all = GeneratorTier.values();
+        for (GeneratorTier tier : all) {
             int gate = tier.gateCobblestoneTier();
             ItemStack out = Progression.generatorStack(tier);
-            ShapedRecipeBuilder.shaped(RecipeCategory.MISC, out)
+            ShapedRecipeBuilder builder = ShapedRecipeBuilder.shaped(RecipeCategory.MISC, out)
                     .define('I', Items.IRON_INGOT)
                     .define('C', Progression.compressedTierIngredient(gate))
-                    .define('F', ModBlocks.FRAME.get())
                     .define('R', Items.REDSTONE)
                     .pattern(" I ")
                     .pattern("CFC")
-                    .pattern(" R ")
-                    .unlockedBy("has_gate_cobblestone", Progression.hasCompressedTier(gate))
+                    .pattern(" R ");
+            // Base is built from a frame; each higher rung is crafted by upgrading the generator below it,
+            // matched on its block_state tier so only the exact previous rung is accepted.
+            if (tier == GeneratorTier.BASE) {
+                builder.define('F', ModBlocks.FRAME.get());
+            } else {
+                builder.define('F', DataComponentIngredient.of(false, DataComponents.BLOCK_STATE,
+                        generatorState(all[tier.ordinal() - 1]), ModItems.COBBLESTONE_GENERATOR.get()));
+            }
+            builder.unlockedBy("has_gate_cobblestone", Progression.hasCompressedTier(gate))
                     .save(pWriter, Progression.recipeId(tier));
         }
     }
@@ -186,10 +195,10 @@ public class ModRecipeProvider extends RecipeProvider implements IConditionBuild
 
         ShapedRecipeBuilder.shaped(RecipeCategory.TOOLS, new ItemStack(ModItems.WRENCH.get()))
                 .define('I', Items.IRON_INGOT)
-                .define('S', Items.STICK)
-                .pattern(" II")
+                .define('B', Items.IRON_BLOCK)
                 .pattern(" I ")
-                .pattern("S  ")
+                .pattern(" BI")
+                .pattern("I  ")
                 .unlockedBy("has_iron", has(Items.IRON_INGOT))
                 .save(pWriter, rl("wrench"));
     }
@@ -351,5 +360,9 @@ public class ModRecipeProvider extends RecipeProvider implements IConditionBuild
     
     private static BlockItemStateProperties pipeState(BcePipeTier tier) {
         return BlockItemStateProperties.EMPTY.with(BcePipeBlock.TIER, tier);
+    }
+
+    private static BlockItemStateProperties generatorState(GeneratorTier tier) {
+        return BlockItemStateProperties.EMPTY.with(CobblestoneGeneratorBlock.TIER, tier);
     }
 }

@@ -42,7 +42,7 @@ public class ModLanguageProvider extends LanguageProvider {
         }
         addBlock(ModBlocks.COMPRESSION_DECOMPRESSOR_CORE_3, "Decompression Core III");
         addBlock(ModBlocks.COMPRESSION_AUTO, "Compression Auto-Compressor");
-        addBlock(ModBlocks.COMPRESSION_AUTO_DECOMPRESSOR, "Auto Decompressor");
+        addBlock(ModBlocks.COMPRESSION_AUTO_DECOMPRESSOR, "Compression Auto-Decompressor");
         addBlock(ModBlocks.COMPRESSION_EDITOR, "Compression Editor");
         addBlock(ModBlocks.BCE_PIPE, "BCE Pipe");
         add("block.rcc.bce_pipe.extract", "Extract");
@@ -61,7 +61,7 @@ public class ModLanguageProvider extends LanguageProvider {
         add("tooltip.rcc.generator.hint.bce", "Emits raw BCE - drain it with an extract-mode BCE pipe.");
         add("tooltip.rcc.generator.array",
                 "Stack 2^(band+1) towers on one BCE bus to mint a whole band-max block per second");
-        add("chat.rcc.generator.cycled", "Generator %1$s - %2$s");
+        add("chat.rcc.generator.status", "Cobblestone Generator %1$s - %2$s");
         addBlock(ModBlocks.GENERATOR_CORE, "Generator Core");
         addBlock(ModBlocks.GENERATOR_CORE_2, "Generator Core II");
         add("tooltip.rcc.generator_core.cost", "Power draw: %s FE/t while minting");

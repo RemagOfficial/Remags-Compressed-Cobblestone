@@ -158,6 +158,12 @@ public final class DisplayNames {
         return sb.toString();
     }
 
+    // Band numeral for GUI/block titles: the first band (index 1) is un-numeraled to match its block name
+    // ("Compression Core"), every later band gets its roman index (II, III, ...). Returns "" for band 1.
+    public static String bandNumeral(CompressionBand band) {
+        return band.index() < 2 ? "" : roman(band.index());
+    }
+
     private static String capitalize(String s) {
         if (s.isEmpty()) {
             return s;
